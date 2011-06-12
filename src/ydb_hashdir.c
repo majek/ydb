@@ -26,8 +26,8 @@ struct item {
 static struct hashdir_item _unpack(struct item item)
 {
 	return (struct hashdir_item) {item.key_hash,
-			item.a_offset << DATA_ALIGN,
-			item.a_size << DATA_ALIGN,
+			(uint64_t)item.a_offset << DATA_ALIGN,
+			(uint64_t)item.a_size << DATA_ALIGN,
 			item.bitmap_pos
 			};
 }
@@ -35,8 +35,8 @@ static struct item _pack(struct hashdir_item hdi) {
 	assert(hdi.offset % (1 << DATA_ALIGN) == 0);
 	assert(hdi.size % (1 << DATA_ALIGN) == 0);
 	return (struct item) {hdi.key_hash,
-			hdi.offset >> DATA_ALIGN,
-			hdi.size >> DATA_ALIGN,
+			(uint64_t)hdi.offset >> DATA_ALIGN,
+			(uint64_t)hdi.size >> DATA_ALIGN,
 			hdi.bitmap_pos
 			};
 }
