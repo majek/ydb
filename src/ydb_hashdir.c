@@ -21,7 +21,7 @@ struct item {
 
 #define DATA_ALIGN 5
 #define HASHDIR_INITIAL_SIZE (128)
-#define HASHDIR_SHRINK_THRESHOLD (((4096*1) / (int)sizeof(struct item)) + 1)
+#define HASHDIR_SHRINK_THRESHOLD (((4096*4) / (int)sizeof(struct item)) + 1)
 
 static struct hashdir_item _unpack(struct item item)
 {

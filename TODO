@@ -18,6 +18,7 @@
  - [test] single add plus del (ie: zero elements)
  - [test] zero elements plus log until ratio=0
  - [test] empty batch write
+ - [test] file bigger than 2GB
  - sync() shall also fsync directories, why not.
  - save indexes to disk, if changed more than XXX percent of pages.
  - guard all mallocs/reallocs with assert.

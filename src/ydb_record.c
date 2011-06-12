@@ -26,8 +26,9 @@ struct _header {
 
 struct iovec record_pack(struct record record)
 {
-	int buf_sz = sizeof(struct _header) + record.key_sz + record.value_sz;
-	int padding_sz = LOG_PADDING(buf_sz);
+	unsigned buf_sz = sizeof(struct _header) +
+		record.key_sz + record.value_sz;
+	unsigned padding_sz = LOG_PADDING(buf_sz);
 	buf_sz += padding_sz;
 
 	char *buf = malloc(buf_sz);
@@ -90,9 +91,17 @@ int record_unpack(char *buffer, unsigned buffer_sz, struct record *record_ptr)
 	b += header->value_sz;
 	b += LOG_PADDING(b - buffer);
 	if (adler32(key, header->key_sz) != header->key_sum) {
+		/* fprintf(stderr, "a) %08x %08x\n", */
+		/* 	adler32(key, header->key_sz), */
+		/* 	header->key_sum); */
 		return -3;
 	}
 	if (adler32(value, header->value_sz) != header->value_sum) {
+		/* fprintf(stderr, "b) %08x %u %08x [%.*s]\n", */
+		/* 	adler32(value, header->value_sz), */
+		/* 	header->value_sz, */
+		/* 	header->value_sum, */
+		/* 	header->value_sz, value); */
 		return -3;
 	}
 	*record_ptr = (struct record) {header->magic,

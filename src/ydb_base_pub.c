@@ -163,19 +163,18 @@ static int _base_gc_callback(void *ctx_p, const char *key, unsigned key_sz,
 	struct _gc_ctx *ctx = (struct _gc_ctx *)ctx_p;
 	batch_set(ctx->batch, key, key_sz, value, value_sz);
 	ctx->count -= 1;
-	if (ctx->count > 0) {
+	if (ctx->count == 0) {
 		int r = base_write(ctx->base, ctx->batch, 0);
 		batch_free(ctx->batch);
 		ctx->batch = batch_new();
 		ctx->count = 1024;
-		if (r >= 0) {
-			ctx->written += r;
-			return 0;
-		} else {
+		if (r < 0) {
 			return r;
 		}
+		ctx->written += r;
+		return 0;
 	}
-	return 1;
+	return 0;
 }
 
 int base_gc(struct base *base, unsigned gc_size)
@@ -184,8 +183,8 @@ int base_gc(struct base *base, unsigned gc_size)
 
 	gettimeofday(&tv0, NULL);
 	struct _gc_ctx ctx = {base, batch_new(), 1024, 0};
-	struct log *log = logs_oldest(base->logs);
-	int r = log_iterate_sorted(log, gc_size,
+	int r = log_iterate_sorted(logs_oldest(base->logs),
+				   gc_size,
 				   _base_gc_callback, &ctx);
 	if (r < 0) {
 		goto error;
@@ -198,9 +197,11 @@ int base_gc(struct base *base, unsigned gc_size)
 	r = ctx.written + r;
 error:;
 	gettimeofday(&tv1, NULL);
-	log_info(base->db, "Gc round of size %6.1f MB took %lu ms. (r=%i)",
+	log_info(base->db, "Gc round of size %6.1f MB took %lu ms, "
+		 "ratio of %6.3f, r is %i",
 		 (float)gc_size / (1024*1024.),
 		 TIMEVAL_MSEC_SUBTRACT(tv1, tv0),
+		 base_ratio(base),
 		 r);
 	return r;
 }

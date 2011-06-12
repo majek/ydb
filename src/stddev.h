@@ -18,22 +18,22 @@ static inline void INIT_STDDEV(struct stddev *sd)
 	*sd = STDDEV_INIT;
 }
 
-static inline void stddev_add(struct stddev *sd, int value)
+static inline void stddev_add(struct stddev *sd, int64_t value)
 {
 	sd->count++;
 	sd->sum += value;
 	sd->sum_sq += value * value;
 }
 
-static inline void stddev_remove(struct stddev *sd, int old_value)
+static inline void stddev_remove(struct stddev *sd, int64_t old_value)
 {
 	sd->count--;
 	sd->sum -= old_value;
 	sd->sum_sq -= old_value * old_value;
 }
 
-static inline void stddev_modify(struct stddev *sd, int old_value,
-				 int new_value)
+static inline void stddev_modify(struct stddev *sd, int64_t old_value,
+				 int64_t new_value)
 {
 	stddev_remove(sd, old_value);
 	stddev_add(sd, new_value);

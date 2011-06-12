@@ -7,6 +7,7 @@
 #include <sys/uio.h>
 #include <sys/types.h>
 #include <unistd.h>
+#include <sys/time.h>
 
 #include "stddev.h"
 #include "bitmap.h"
@@ -23,6 +24,7 @@
 #include "ydb_hashdir.h"
 #include "ydb_batch.h"
 #include "ydb_db.h"
+#include "ydb_sys.h"
 
 #include "ydb.h"
 #include "ydb_base.h"
@@ -34,6 +36,12 @@ struct ydb {
 	struct dir *index_dir;
 };
 
+static void _ydb_close(struct ydb *ydb)
+{
+	base_free(ydb->base);
+	db_free(ydb->db);
+	free(ydb);
+}
 
 struct ydb *ydb_open(const char *directory, struct ydb_options *options)
 {
@@ -48,18 +56,28 @@ struct ydb *ydb_open(const char *directory, struct ydb_options *options)
 		db_free(db);
 		return NULL;
 	}
-	log_info(db, "Opening YDB database \"%s\" by pid=%i.", directory, getpid());
+	log_info(db, "Opening YDB database \"%s\" by pid=%i.",
+		 directory, getpid());
+
+	linux_check_overcommit(db);
 
 	struct ydb *ydb = malloc(sizeof(struct ydb));
 	ydb->db = db;
 	ydb->base = base;
 
+	struct timeval tv0, tv1;
+	gettimeofday(&tv0, NULL);
+
 	int r = base_load(ydb->base);
 	if (r != 0) {
-		ydb_close(ydb);
+		_ydb_close(ydb);
 		return NULL;
 	}
 	base_print_stats(ydb->base);
+	gettimeofday(&tv1, NULL);
+	log_info(db, "YDB loaded %llu items in %.3f seconds.",
+		 (unsigned long long)base->used_size.count,
+		 (float)TIMEVAL_MSEC_SUBTRACT(tv1, tv0) / 1000.);
 	return ydb;
 }
 
@@ -67,9 +85,7 @@ void ydb_close(struct ydb *ydb)
 {
 	base_print_stats(ydb->base);
 	log_info(ydb->db, "Closing YDB database. %s", "");
-	base_free(ydb->base);
-	db_free(ydb->db);
-	free(ydb);
+	_ydb_close(ydb);
 }
 
 float ydb_ratio(struct ydb *ydb)

@@ -18,9 +18,6 @@ void itree_add_noidx(struct itree *itree, uint128_t key_hash,
 		     uint64_t log_remno, int hpos);
 
 int itree_del(struct itree *itree, uint128_t key_hash);
-/* TODO: maybe we don't need both? */
-int itree_get(struct itree *itree, uint128_t key_hash, struct hashdir_item *hdi,
-	      uint64_t *log_remno_ptr);
 int itree_get2(struct itree *itree, uint128_t key_hash,
 	       uint64_t *log_remno_ptr, int *hpos_ptr);
 

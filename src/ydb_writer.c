@@ -16,10 +16,8 @@ struct writer {
 	uint64_t file_size;
 };
 
-struct writer *writer_new(struct db *db, struct dir *dir, const char *filename,
-			  int create)
+struct writer *writer_new(struct dir *dir, const char *filename, int create)
 {
-	db = db;
 	struct file *file;
 	uint64_t fsize = 0;
 	if (create) {

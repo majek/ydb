@@ -45,8 +45,7 @@ int base_roll(struct base *base)
 	}
 
 	writer_free(base->writer);
-	base->writer = writer_new(base->db, base->log_dir,
-				  log_filename(log_number), 1);
+	base->writer = writer_new(base->log_dir, log_filename(log_number), 1);
 	if (base->writer == NULL) {
 		log_error(base->db, "Unable to create a new log, no %llu",
 			  (unsigned long long)log_number);
@@ -65,10 +64,12 @@ int base_roll(struct base *base)
 	log_do_replay(log, _dummy_reply_callback, NULL);
 	struct log *newest = logs_newest(base->logs);
 	log_freeze(newest);
-	log_info(base->db, "Freezing log=%llx %6.1f MB committed, %6.1f MB used, ratio=%.3f",
+	log_info(base->db, "Freezing log=%llx %6.1f MB committed, %6.1f MB used, "
+		 "%10u items, ratio=%6.3f",
 		 (unsigned long long)log_get_number(newest),
 		 (float)log_disk_size(newest) / (1024*1024.),
 		 (float)log_used_size(newest) / (1024*1024.),
+		 log_sets_count(newest),
 		 log_ratio(newest));
 	/* TODO: */
 	/* int r = log_save(newest); */
@@ -240,8 +241,8 @@ void base_print_stats(struct base *base)
 	uint64_t counter;
 	double avg, dev;
 	stddev_get(&base->used_size, &counter, &avg, &dev);
-	log_info(base->db, "Item statistics: %.1f bytes average, %.1f bytes deviation, "
-		 "%llu keys loaded", avg, dev, (unsigned long long)counter);
+	log_info(base->db, "Item stats: %9.1f bytes average, %7.1f bytes deviation, "
+		 "%llu items", avg, dev, (unsigned long long)counter);
 	unsigned long allocated, wasted;
 	itree_mem_stats(base->itree, &allocated, &wasted);
 	log_info(base->db, "Tree memory: %8.1f MB committed, "

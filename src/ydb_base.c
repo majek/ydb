@@ -44,10 +44,9 @@ static void _del(void *base_p, uint64_t log_remno, int hpos,
 		 move_item_callback callback, void *callback_cb) {
 	struct base *base = (struct base *)base_p;
 	struct log *log = log_by_remno(base->logs, log_remno);
-	struct hashdir_item hdi = log_get(log, hpos);
-	stddev_remove(&base->used_size, hdi.size);
 
-	log_del(log, hpos, callback, callback_cb);
+	struct hashdir_item hdi = log_del(log, hpos, callback, callback_cb);
+	stddev_remove(&base->used_size, hdi.size);
 }
 
 static uint64_t _between(uint64_t min, uint64_t user, uint64_t max)
@@ -138,6 +137,11 @@ int base_load(struct base *base)
 			struct sreader_item rec;
 			r = sreader_read(sreader, &rec);
 			if (r != 1) {
+				if (r != 0) { /* ok? */
+					log_warn(base->db, "Error on reading snapshot. I'll "
+						 "slow-read all the remaining logs from %llx.",
+						 (unsigned long long)log_number+1);
+				}
 				break;
 			}
 			assert(rec.log_number > log_number);
@@ -155,6 +159,9 @@ int base_load(struct base *base)
 				    dir_file_exists(base->log_dir, log_filename(log_number))) {
 					log_number -= 1;
 					/* Try to read this log lazily. */
+					log_warn(base->db, "Error on reading log %llx. I'll "
+						 "slow-read from this log.",
+						 (unsigned long long)log_number+1);
 					break;
 				}
 				/* If oldest == NULL, it's
@@ -166,19 +173,15 @@ int base_load(struct base *base)
 				stddev_add(&base->disk_size, log_disk_size(log));
 				gettimeofday(&tv1, NULL);
 				log_info(base->db, "log=%llx %6.1f MB committed, "
-					 "%6.1f MB used, ratio=%6.3f (from snapshot in %5li ms)",
+					 "%6.1f MB used, %10u items, ratio=%6.3f "
+					 "(from snapshot in %5li ms)",
 					 (unsigned long long)log_number,
 					 (float)log_disk_size(log) / (1024*1024.),
 					 (float)log_used_size(log) / (1024*1024.),
+					 log_sets_count(log),
 					 log_ratio(log),
 					 TIMEVAL_MSEC_SUBTRACT(tv1, tv0));
 			}
-		}
-		if (r != 0) {
-			log_warn(base->db, "Error on reading snapshot. I'll "
-				 "slow-read all the remaining logs from %llx.",
-				 (unsigned long long)log_number+1);
-			/* TODO: test */
 		}
 		sreader_free(sreader);
 	}
@@ -194,30 +197,38 @@ int base_load(struct base *base)
 		log_number = logno_list[i];
 		struct log *log = log_new_replay(base->db, log_number,
 						 base->log_dir, base->index_dir);
-
+		if (log == NULL) {
+			log_error(base->db, "Can't load log %llx.",
+				  (unsigned long long)log_number);
+			return -1;
+		}
 		logs_add(base->logs, log);
 		stddev_add(&base->disk_size, log_disk_size(log));
-		log_do_replay(log, base_write_callback, base);
+		int r = log_do_replay(log, base_write_callback, base);
+		if (r != 0) {
+			log_error(base->db, "Can't load log %llx.",
+				  (unsigned long long)log_number);
+			return -1;
+		}
 		log_freeze(log);
 
 		gettimeofday(&tv1, NULL);
 		log_info(base->db, "log=%llx %6.1f MB committed, %6.1f MB used, "
-			 "ratio=%6.3f (replayed in %5li ms)",
+			 "%10u items, ratio=%6.3f (replayed in %5li ms)",
 			 (unsigned long long)log_number,
 			 (float)log_disk_size(log) / (1024*1024.),
 			 (float)log_used_size(log) / (1024*1024.),
+			 log_sets_count(log),
 			 log_ratio(log),
 			 TIMEVAL_MSEC_SUBTRACT(tv1, tv0));
 	}
 	uint64_t logno;
 	if (logno_list_sz == 0) {
 		logno = logs_new_number(base->logs);
-		base->writer = writer_new(base->db, base->log_dir,
-					  log_filename(logno), 1);
+		base->writer = writer_new(base->log_dir, log_filename(logno), 1);
 	} else {
 		logno = logno_list[logno_list_sz-1];
-		base->writer = writer_new(base->db, base->log_dir,
-					  log_filename(logno), 0);
+		base->writer = writer_new(base->log_dir, log_filename(logno), 0);
 	}
 	free(logno_list);
 
@@ -227,14 +238,26 @@ int base_load(struct base *base)
 
 	struct log *log = log_new_replay(base->db, log_number,
 					 base->log_dir, base->index_dir);
+	if (log == NULL) {
+		log_error(base->db, "Can't load log %llx.",
+			  (unsigned long long)log_number);
+		return -1;
+	}
 	logs_add(base->logs, log);
 	stddev_add(&base->disk_size, log_disk_size(log));
-	log_do_replay(log, base_write_callback, base);
+	r = log_do_replay(log, base_write_callback, base);
+	if (r != 0) {
+		log_error(base->db, "Can't load log %llx.",
+			  (unsigned long long)log_number);
+		return -1;
+	}
 
 	gettimeofday(&tv1, NULL);
-	log_info(base->db, "log=%llx %6.1f MB committed (writer replayed in %5li ms)",
+	log_info(base->db, "log=%llx %6.1f MB committed, %10u items "
+		 "(writer replayed in %5li ms)",
 		 (unsigned long long)log_number,
 		 (float)log_disk_size(log) / (1024*1024.),
+		 log_sets_count(log),
 		 TIMEVAL_MSEC_SUBTRACT(tv1, tv0));
 
 	if (logno_list_sz > 1) {

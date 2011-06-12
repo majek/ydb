@@ -12,7 +12,7 @@
 #include "ydb_batch.h"
 #include "ydb_record.h"
 
-#define BATCH_MIN_SLOTS 32
+#define BATCH_MIN_SLOTS 1024
 
 struct batch {
 	struct iovec *iov;

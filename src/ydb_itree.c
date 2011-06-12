@@ -133,19 +133,6 @@ int itree_del(struct itree *itree, uint128_t key_hash)
 	return 0;
 }
 
-int itree_get(struct itree *itree, uint128_t key_hash, struct hashdir_item *hdi,
-	      uint64_t *log_remno_ptr)
-{
-	uint64_t found = ohamt_search(&itree->tree, key_hash);
-	if (found) {
-		struct tree_item ti = _unpack(found);
-		*hdi = itree->rlog_get(itree->rlog_ctx, ti.log_remno, ti.hpos);
-		*log_remno_ptr = ti.log_remno;
-		return 1;
-	}
-	return 0;
-}
-
 int itree_get2(struct itree *itree, uint128_t key_hash,
 	       uint64_t *log_remno_ptr, int *hpos_ptr)
 {

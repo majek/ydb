@@ -375,15 +375,16 @@ int file_appendv(struct file *file, const struct iovec *iov, int iovcnt,
 		 uint64_t file_size)
 {
 	int i;
-	int len = 0;
-	for (i=0; i<iovcnt; i++) {
+	uint64_t len = 0;
+	for (i=0; i < iovcnt; i++) {
 		len += iov[i].iov_len;
 	}
 
 	int r = writev(file->fd, iov, iovcnt);
-	FILETRACE(file, r, "writev(\"%s\", %i)", file->pathname, len);
+	FILETRACE(file, r, "writev(\"%s\", %llu)", file->pathname,
+		  (unsigned long long)len);
 	/* TODO: are we really sure writev won't write in chunks? */
-	if (r < 0 || r != len) {
+	if (r < 0 || (unsigned)r != len) {
 		file_truncate(file, file_size);
 		return -1;
 	}

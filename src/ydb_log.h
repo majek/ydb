@@ -37,7 +37,8 @@ unsigned log_prefetch(struct log *log, int hpos);
 
 struct hashdir_item log_get(struct log *log, int hpos);
 int log_add(struct log *log, struct hashdir_item hdi);
-void log_del(struct log *log, int hpos, log_callback callback, void *context);
+struct hashdir_item log_del(struct log *log, int hpos,
+			    log_callback callback, void *context);
 
 
 void log_freeze(struct log *log);

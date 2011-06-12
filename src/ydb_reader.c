@@ -107,9 +107,10 @@ int reader_replay(struct reader *reader, reader_replay_cb callback, void *contex
 			_reader_log_error(reader, r, buf - buf_start);
 			log_error(reader->db, "In order to continue you may "
 				  "want to truncate the log file %s to %li "
-				  "bytes. In such case you will lose %li "
-				  "bytes of data.", reader->filename,
-				  buf - buf_start, buf_end - buf);
+				  "bytes. In such case you will lose %.1f MB "
+				  "of data.", reader->filename,
+				  buf - buf_start,
+				  (float)(buf_end - buf) / (1024*1024.));
 			return -1;
 		}
 		callback(context, rec.magic, rec.key, rec.key_sz,

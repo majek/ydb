@@ -105,6 +105,7 @@ uint64_t logs_new_number(struct logs *logs)
 
 void logs_add(struct logs *logs, struct log *log)
 {
+	assert(log);
 	struct log *found = hamt_insert(&logs->logs, log);
 	assert(found == log);
 	if (logs->oldest == NULL) {

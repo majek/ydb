@@ -1,10 +1,14 @@
 #define _POSIX_SOURCE
 
+#include <stdio.h>
+#include <stdlib.h>
 #include <signal.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <unistd.h>
 
+#include "ydb_db.h"
+#include "ydb_logging.h"
 #include "ydb_sys.h"
 
 
@@ -58,4 +62,32 @@ int sys_fork(fork_callback callback, void *userdata)
 		return -1;
 	}
 	return status;		/* Status has a pid of grandchild. */
+}
+
+
+
+/* Based on redis. */
+static int _linux_get_overcommit()
+{
+    FILE *fp = fopen("/proc/sys/vm/overcommit_memory","r");
+    char buf[64];
+
+    if (fp == NULL) return -1;
+    char *r = fgets(buf, sizeof(buf), fp);
+    fclose(fp);
+    if (r) {
+	    return atoi(buf);
+    }
+    return -1;
+}
+
+void linux_check_overcommit(struct db *db)
+{
+	if (_linux_get_overcommit() == 0) {
+		log_warn(db, "WARNING overcommit_memory is disabled! Loading "
+			 "large files may fail under low memory condition. To "
+			 "fix this issue add 'vm.overcommit_memory = 1' to "
+			 "/etc/sysctl.conf and then reboot or run the command "
+			 "'sysctl vm.overcommit_memory=1'. %s", "");
+	}
 }

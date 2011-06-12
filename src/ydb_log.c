@@ -280,7 +280,8 @@ int log_add(struct log *log, struct hashdir_item hdi)
 	return hashdir_add(log->hashdir, hdi);
 }
 
-void log_del(struct log *log, int hpos, log_callback callback, void *context)
+struct hashdir_item log_del(struct log *log, int hpos,
+			    log_callback callback, void *context)
 {
 	struct hashdir_item hdi = hashdir_get(log->hashdir, hpos);
 	stddev_remove(&log->used_size, hdi.size);
@@ -301,6 +302,7 @@ void log_del(struct log *log, int hpos, log_callback callback, void *context)
 			}
 		}
 	}
+	return hdi;
 }
 
 void log_freeze(struct log *log)
