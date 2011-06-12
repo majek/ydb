@@ -1,0 +1,35 @@
+ - (done) set parameters (limits) dynamically
+ - (done) crash if the index is removed
+ - two file descriptors per open log is quite bad
+ - why three fstats one after another?
+ - index backups aren't neccesary
+ - (done) save snapshot if loading via replay
+ - log_erros shall be critical
+ - iterate shall prefetch and presort
+ - implement gc
+ - check if ratio makes sense (size of log file vs sum of elements)
+ - move average size to hashlists (maybe)
+ - review asserts
+ - get rid of _POSIX defines and strdups
+ - allocate only 'lower' memory for memalloc
+ - rewrite grinder
+ - all log numbers in log shall be  %llx not %llu
+ - snapshot in fork.
+ - [test] single add plus del (ie: zero elements)
+ - [test] zero elements plus log until ratio=0
+ - [test] empty batch write
+ - sync() shall also fsync directories, why not.
+ - save indexes to disk, if changed more than XXX percent of pages.
+ - guard all mallocs/reallocs with assert.
+ - warn if ulimit -n smaller than slots.
+ - warn on no- memory overflow setting
+
+ - review exported functions
+ - check on 32 bit platform
+ - erlang bindings
+ - allow batches with sets going below offset limit
+ - compile on mac
+ - compile to one big file
+ - code coverage
+ - remove dependency on uint128_t type - compile using tcc
+ - define and document endianness
