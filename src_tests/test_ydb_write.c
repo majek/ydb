@@ -30,6 +30,11 @@ int do_line(char *action, int tokc, char **tokv)
 		assert(r >= 0);
 		ydb_batch_free(batch);
 		batch = ydb_batch();
+
+		while (ydb_ratio(ydb) > 4.0) {
+			int j = ydb_roll(ydb, 1 << 20);
+			assert(j >= 0);
+		}
 		return 0;
 	}
 	return 1;
@@ -38,7 +43,7 @@ int do_line(char *action, int tokc, char **tokv)
 int main(int argc, char **argv)
 {
 	ydb = test_ydb_open(argc, argv,
-			    (struct ydb_options){4 << 20,0,0});
+			    (struct ydb_options){0,0,0});
 	batch = ydb_batch();
 
 	int ret = readlines(stdin, do_line);
