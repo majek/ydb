@@ -22,7 +22,8 @@ char *gen_key(unsigned key_sz)
 
 char *gen_value(unsigned value_sz)
 {
-	value_sz = random() % value_sz;
+	value_sz = (random() % value_sz)+1;
+	value[value_sz] = '\0';
 	if (value_sz > 6) {
 		memset(&value[6], 'X', value_sz - 6);
 		value_sz = 6;
