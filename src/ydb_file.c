@@ -292,10 +292,16 @@ struct file *file_open_append_new(struct dir *top_dir, const char *filename)
 	return file;
 }
 
+struct file *file_open_new_rw(struct dir *top_dir, const char *filename)
+{
+	return _file_new(top_dir, filename, O_RDWR | O_CREAT | O_TRUNC);
+}
+
 struct file *file_open_read(struct dir *top_dir, const char *filename)
 {
 	return _file_new(top_dir, filename, O_RDONLY | O_NOATIME);
 }
+
 
 void file_close(struct file *file)
 {
@@ -426,6 +432,47 @@ void *file_mmap_ro(struct file *file, uint64_t *size_ptr)
 	madvise(ptr, MIN(4096*4, *size_ptr), MADV_WILLNEED);
 
 	return ptr;
+}
+
+static void *_file_mmap(struct file *file, uint64_t size, int flags)
+{
+	if (size == 0) {
+		/* Can't mmap 0 bytes. */
+		static int a;
+		return &a;
+	}
+	void *ptr = mmap(MMAP_HIGH_ADDR, size, PROT_READ | PROT_WRITE, flags,
+			 file->fd, 0);
+	if (ptr == MAP_FAILED) {
+		FILETRACE(file, -1, "mmap(\"%s\", %llu, %i)",
+			  file->pathname, (unsigned long long)size, flags);
+		return NULL;
+	}
+	return ptr;
+}
+
+/* void *file_mmap_ro(struct file *file, uint64_t size) */
+/* { */
+/* 	void *ptr = _file_mmap(file, size, MAP_PRIVATE); */
+/* 	if (ptr) { */
+/* 		/\* Only hints, ignore errors.  *\/ */
+/* 		madvise(ptr, *size_ptr, MADV_SEQUENTIAL); */
+/* 		madvise(ptr, MIN(4096*4, *size_ptr), MADV_WILLNEED); */
+/* 	} */
+/* 	return ptr; */
+/* } */
+
+void *file_mmap_share(struct file *file, uint64_t size)
+{
+	return _file_mmap(file, size, MAP_SHARED);
+}
+
+int file_msync(struct db *db, void *ptr, uint64_t size)
+{
+	int r = msync(ptr, size, MS_SYNC);
+	DBTRACE(db, r, "msync(%p, %llu, MS_SYNC)",
+		ptr, (unsigned long long)size);
+	return r;
 }
 
 void file_munmap(struct db *db, void *ptr, uint64_t size)

@@ -17,6 +17,7 @@ int dir_file_exists(struct dir *dir, const char *filename);
 
 struct file *file_open_append(struct dir *top_dir, const char *filename);
 struct file *file_open_append_new(struct dir *top_dir, const char *filename);
+struct file *file_open_new_rw(struct dir *top_dir, const char *filename);
 struct file *file_open_read(struct dir *top_dir, const char *filename);
 void file_close(struct file *file);
 int file_rind(struct file *file);
@@ -30,7 +31,11 @@ int file_appendv(struct file *file, const struct iovec *iov, int iovcnt,
 		 uint64_t file_size);
 void file_prefetch(struct file *file, uint64_t offset, uint64_t size);
 
+/* TODO: remove one */
 void *file_mmap_ro(struct file *file, uint64_t *size_ptr);
+void *file_mmap(struct file *file, uint64_t size);
+void *file_mmap_share(struct file *file, uint64_t size);
+int file_msync(struct db *db, void *ptr, uint64_t size);
 void file_munmap(struct db *db, void *ptr, uint64_t size);
 void *file_remap(struct db *db, void *ptr,
 		 uint64_t old_size, uint64_t new_size);

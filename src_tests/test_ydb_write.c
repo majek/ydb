@@ -31,7 +31,10 @@ int do_line(char *action, int tokc, char **tokv)
 		ydb_batch_free(batch);
 		batch = ydb_batch();
 
+		if (ydb_ratio(ydb) > 4.0)
+			fprintf(stderr, " [*] need to do gc\n");
 		while (ydb_ratio(ydb) > 4.0) {
+			fprintf(stderr, " [.] gc ratio=%f\n", ydb_ratio(ydb));
 			int j = ydb_roll(ydb, 1 << 20);
 			assert(j >= 0);
 		}
@@ -42,8 +45,10 @@ int do_line(char *action, int tokc, char **tokv)
 
 int main(int argc, char **argv)
 {
-	ydb = test_ydb_open(argc, argv,
-			    (struct ydb_options){0,0,0});
+	ydb = test_ydb_open(argc, argv, (struct ydb_options) {
+			0,
+				0,
+				0});
 	batch = ydb_batch();
 
 	int ret = readlines(stdin, do_line);

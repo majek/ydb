@@ -64,13 +64,12 @@ int base_roll(struct base *base)
 	log_do_replay(log, _dummy_reply_callback, NULL);
 	struct log *newest = logs_newest(base->logs);
 	log_freeze(newest);
-	log_info(base->db, "Freezing log=%llx %6.1f MB committed, %6.1f MB used, "
-		 "%10u items, ratio=%6.3f",
+	log_info(base->db, "log=%llx %6.1f MB committed, %6.1f MB used, "
+		 "%10u items (freezing)",
 		 (unsigned long long)log_get_number(newest),
 		 (float)log_disk_size(newest) / (1024*1024.),
 		 (float)log_used_size(newest) / (1024*1024.),
-		 log_sets_count(newest),
-		 log_ratio(newest));
+		 log_sets_count(newest));
 	/* TODO: */
 	/* int r = log_save(newest); */
 	/* if (r != 0) { */

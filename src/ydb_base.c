@@ -92,6 +92,10 @@ void base_free(struct base *base)
 {
 	while (logs_oldest(base->logs)) {
 		struct log *log = logs_oldest(base->logs);
+		if (log != logs_newest(base->logs)) {
+			log_index_save(log);
+		}
+
 		logs_del(base->logs, log);
 		log_free(log);
 	}
@@ -173,13 +177,12 @@ int base_load(struct base *base)
 				stddev_add(&base->disk_size, log_disk_size(log));
 				gettimeofday(&tv1, NULL);
 				log_info(base->db, "log=%llx %6.1f MB committed, "
-					 "%6.1f MB used, %10u items, ratio=%6.3f "
+					 "%6.1f MB used, %10u items "
 					 "(from snapshot in %5li ms)",
 					 (unsigned long long)log_number,
 					 (float)log_disk_size(log) / (1024*1024.),
 					 (float)log_used_size(log) / (1024*1024.),
 					 log_sets_count(log),
-					 log_ratio(log),
 					 TIMEVAL_MSEC_SUBTRACT(tv1, tv0));
 			}
 		}
@@ -214,12 +217,11 @@ int base_load(struct base *base)
 
 		gettimeofday(&tv1, NULL);
 		log_info(base->db, "log=%llx %6.1f MB committed, %6.1f MB used, "
-			 "%10u items, ratio=%6.3f (replayed in %5li ms)",
+			 "%10u items (replayed in %5li ms)",
 			 (unsigned long long)log_number,
 			 (float)log_disk_size(log) / (1024*1024.),
 			 (float)log_used_size(log) / (1024*1024.),
 			 log_sets_count(log),
-			 log_ratio(log),
 			 TIMEVAL_MSEC_SUBTRACT(tv1, tv0));
 	}
 	uint64_t logno;
@@ -253,10 +255,11 @@ int base_load(struct base *base)
 	}
 
 	gettimeofday(&tv1, NULL);
-	log_info(base->db, "log=%llx %6.1f MB committed, %10u items "
-		 "(writer replayed in %5li ms)",
+	log_info(base->db, "log=%llx %6.1f MB committed, %6.1f MB used, "
+		 "%10u items (writer replayed in %5li ms)",
 		 (unsigned long long)log_number,
 		 (float)log_disk_size(log) / (1024*1024.),
+		 (float)log_used_size(log) / (1024*1024.),
 		 log_sets_count(log),
 		 TIMEVAL_MSEC_SUBTRACT(tv1, tv0));
 

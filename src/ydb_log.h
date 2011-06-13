@@ -55,4 +55,5 @@ unsigned log_sets_count(struct log *log);
 
 uint64_t log_disk_size(struct log *log);
 uint64_t log_used_size(struct log *log);
-float log_ratio(struct log *log);
+
+void log_index_save(struct log *log);

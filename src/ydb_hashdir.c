@@ -69,9 +69,41 @@ struct hashdir *hashdir_new(struct db *db)
 	return hd;
 }
 
+
+static char *_dirty_filename(const char *pathname)
+{
+	static char buf[256];
+	snprintf(buf, sizeof(buf), "%s.dirty", pathname);
+	return buf;
+}
+
+
+static char *_hashdir_create_dirty(struct dir *dir, const char *filename,
+				   uint64_t size)
+{
+	struct file *dirty = file_open_new_rw(dir, _dirty_filename(filename));
+	if (dirty == NULL) {
+		return NULL;
+	}
+
+	int r = file_truncate(dirty, size);
+	if (r < 0) {
+		file_close(dirty);
+		return NULL;
+	}
+
+	char *buf = file_mmap_share(dirty, size);
+	file_close(dirty);
+	if (buf == NULL) {
+		return NULL;
+	}
+	return buf;
+}
+
 struct hashdir *hashdir_new_load(struct db *db,
 				 struct dir *dir, const char *filename)
 {
+	/* TODO: try to load dirty first. */
 	struct file *mmap = file_open_read(dir, filename);
 	if (mmap == NULL) {
 		return NULL;
@@ -90,16 +122,30 @@ struct hashdir *hashdir_new_load(struct db *db,
 	}
 	uint32_t *checksum_ptr = (uint32_t*)(buf + size - 4);
 	if (adler32(buf, size - 4) != *checksum_ptr) {
-		log_error(db, "%s can't load file: broken checksum", filename);
+		log_error(db, "%s can't load file: broken checksum "
+			  "%08x != %08x", filename,
+			  adler32(buf, size-4), *checksum_ptr);
 		file_munmap(db, buf, size);
 		return NULL;
 	}
+
+	char *dirty = _hashdir_create_dirty(dir, filename, size);
+	if (dirty == NULL) {
+		log_error(db, "Can't open dirty index. %s", "");
+		file_munmap(db, buf, size);
+		return NULL;
+	}
+
+	memcpy(dirty, buf, size);
+	file_munmap(db, buf, size);
+
 	struct hashdir *hd = _hashdir_new(db);
-	hd->items = (struct item*)buf;
+	hd->items = (struct item*)dirty;
 	hd->items_cnt = (size-4) / sizeof(struct item);
 	hd->items_sz = hd->items_cnt;
 	hd->mmap_sz = size;
 
+	/* TODO: are two passess really necessary? */
 	int max_bitmap_pos = 0;
 	int i;
 	for (i=1; i < hd->items_cnt; i++) {
@@ -108,7 +154,7 @@ struct hashdir *hashdir_new_load(struct db *db,
 			max_bitmap_pos = bitmap_pos;
 		}
 	}
-	assert(hd->items_cnt < 2 || max_bitmap_pos);
+	assert(max_bitmap_pos);
 	hd->bitmap = bitmap_new(max_bitmap_pos + 1, 1);
 	for (i=1; i < hd->items_cnt; i++) {
 		bitmap_clear(hd->bitmap, hd->items[i].bitmap_pos);
@@ -228,8 +274,37 @@ static char *_temp_filename(const char *pathname)
 
 int hashdir_save(struct hashdir *hd, struct dir *dir, const char *filename)
 {
+	dir = dir;
+	filename = filename;
+
 	assert(hd->bitmap);
-	/* TODO: replace with fork() */
+	assert(hd->mmap_sz);
+
+	/* TODO: truncate */
+	char *buf = (char*)hd->items;
+	uint64_t size = sizeof(struct item)*hd->items_cnt;
+	*(uint32_t*)(buf+size) = adler32(buf, size);
+
+	int r = file_msync(hd->db, buf, size);
+	if (r < 0) {
+		return -1;
+	}
+	return 0;
+}
+
+int hashdir_size(struct hashdir *hd)
+{
+	return hd->items_cnt;
+}
+
+struct bitmap *hashdir_get_bitmap(struct hashdir *hd)
+{
+	return hd->bitmap;
+}
+
+static int _hashdir_freeze_save(struct hashdir *hd,
+				struct dir *dir, const char *filename)
+{
 	char *tmpname = _temp_filename(filename);
 	struct file *file = file_open_append_new(dir, tmpname);
 	if (file == NULL) {
@@ -263,39 +338,30 @@ int hashdir_save(struct hashdir *hd, struct dir *dir, const char *filename)
 		return -1;
 	}
 
-	if (hd->mmap_sz) {
-		/* We're using mmap from old file. Let's switch to new. */
-		struct hashdir *new_hd = hashdir_new_load(hd->db, dir, filename);
-		if (new_hd) {
-			struct hashdir t = *hd;
-			*hd = *new_hd;
-			*new_hd = t;
-			hashdir_free(new_hd);
-		}
+	assert(hd->mmap_sz == 0);
+
+	/* We're using mmap from old file. Let's switch to new. */
+	struct hashdir *new_hd = hashdir_new_load(hd->db, dir, filename);
+	if (new_hd == NULL) {
+		return -1;
 	}
+	/* Swap. */
+	struct hashdir t = *hd;
+	*hd = *new_hd;
+	*new_hd = t;
+	hashdir_free(new_hd);
 	return 0;
 }
 
-int hashdir_size(struct hashdir *hd)
-{
-	return hd->items_cnt;
-}
-
-void hashdir_freeze(struct hashdir *hd)
+int hashdir_freeze(struct hashdir *hd, struct dir *dir, const char *filename)
 {
 	assert(hd->bitmap == NULL);
-	/* TODO: quite inefficient */
-	hd->bitmap = bitmap_new(hd->items_cnt+1, 1);
-
+	hd->bitmap = bitmap_new(hd->items_cnt+1, 0);
 	int i;
 	for (i=1; i < hd->items_cnt; i++) {
-		bitmap_clear(hd->bitmap, i);
 		hd->items[i].bitmap_pos = i;
 	}
-}
 
-struct bitmap *hashdir_get_bitmap(struct hashdir *hd)
-{
-	return hd->bitmap;
+	return _hashdir_freeze_save(hd, dir, filename);
 }
 

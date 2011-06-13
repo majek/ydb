@@ -17,6 +17,6 @@ int hashdir_del(struct hashdir *hd, int hdpos);
 int hashdir_del_last(struct hashdir *hd);
 int hashdir_save(struct hashdir *hd, struct dir *dir, const char *filename);
 int hashdir_size(struct hashdir *hd);
-void hashdir_freeze(struct hashdir *hd);
+int hashdir_freeze(struct hashdir *hd, struct dir *dir, const char *filename);
 
 struct bitmap *hashdir_get_bitmap(struct hashdir *hd);

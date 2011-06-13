@@ -36,6 +36,12 @@ struct bitmap *bitmap_new(int count, int initial)
 	bm->cnt = DIV_ROUND_UP(count, 64) * 64;
 	bm->map = malloc(bm->cnt / 8);
 	memset(bm->map, initial ? 0xFF : 0, bm->cnt / 8);
+	if (initial == 0) {
+		int i;
+		for (i = count; i < bm->cnt; i++) {
+			bitmap_set(bm, i);
+		}
+	}
 	return bm;
 }
 

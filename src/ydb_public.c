@@ -36,9 +36,19 @@ struct ydb {
 	struct dir *index_dir;
 };
 
-static void _ydb_close(struct ydb *ydb)
+static void _ydb_close(struct ydb *ydb, int msg)
 {
+	struct timeval tv0, tv1;
+	gettimeofday(&tv0, NULL);
+
 	base_free(ydb->base);
+
+	gettimeofday(&tv1, NULL);
+	if (msg) {
+		log_info(ydb->db, "Closing YDB database (took %lu ms)",
+			 TIMEVAL_MSEC_SUBTRACT(tv1, tv0));
+	}
+
 	db_free(ydb->db);
 	free(ydb);
 }
@@ -70,7 +80,7 @@ struct ydb *ydb_open(const char *directory, struct ydb_options *options)
 
 	int r = base_load(ydb->base);
 	if (r != 0) {
-		_ydb_close(ydb);
+		_ydb_close(ydb, 0);
 		return NULL;
 	}
 	base_print_stats(ydb->base);
@@ -84,8 +94,7 @@ struct ydb *ydb_open(const char *directory, struct ydb_options *options)
 void ydb_close(struct ydb *ydb)
 {
 	base_print_stats(ydb->base);
-	log_info(ydb->db, "Closing YDB database. %s", "");
-	_ydb_close(ydb);
+	_ydb_close(ydb, 1);
 }
 
 float ydb_ratio(struct ydb *ydb)

@@ -48,6 +48,10 @@ static char *idx_filename(uint64_t log_number) {
 	return _filename(log_number, "idx");
 }
 
+static char *_dirty_idx_filename(uint64_t log_number) {
+	return _filename(log_number, "idx.dirty");
+}
+
 static struct log *_log_new(struct db *db, uint64_t log_number,
 			    struct dir *log_dir, struct dir *index_dir)
 {
@@ -290,42 +294,30 @@ struct hashdir_item log_del(struct log *log, int hpos,
 	if (hpos_moved != -1) {
 		struct hashdir_item item = hashdir_get(log->hashdir, hpos_moved);
 		callback(context, item.key_hash, hpos);
-		int s = hashdir_del_last(log->hashdir);
+		hashdir_del_last(log->hashdir);
 		/* TODO: really, quite that often, maybe fork? */
-		if (0 && s) {
-			int r = hashdir_save(log->hashdir, log->index_dir,
-					     idx_filename(log->log_number));
-			if (r == -1) {
-				log_warn(log->db, "Unable to save index for "
-					 "log %llx.",
-					 (unsigned long long)log->log_number);
-			}
-		}
+		/* if (0 && s) { */
+		/* 	int r = hashdir_save(log->hashdir, log->index_dir, */
+		/* 			     idx_filename(log->log_number)); */
+		/* 	if (r == -1) { */
+		/* 		log_warn(log->db, "Unable to save index for " */
+		/* 			 "log %llx.", */
+		/* 			 (unsigned long long)log->log_number); */
+		/* 	} */
+		/* } */
 	}
 	return hdi;
 }
 
 void log_freeze(struct log *log)
 {
-	hashdir_freeze(log->hashdir);
-
-	int r = hashdir_save(log->hashdir, log->index_dir,
-			     idx_filename(log->log_number));
+	int r = hashdir_freeze(log->hashdir, log->index_dir,
+			       idx_filename(log->log_number));
 	if (r == -1) {
 		log_error(log->db, "Unable to save index for log %llx. This is "
 			  "pretty bad.", (unsigned long long)log->log_number);
 		return;
 	}
-
-	struct hashdir *hd = hashdir_new_load(log->db, log->index_dir,
-					      idx_filename(log->log_number));
-	if (hd == NULL) {
-		log_error(log->db, "Unable to load index for log %llx. This is "
-			  "pretty bad.", (unsigned long long)log->log_number);
-		return;
-	}
-	hashdir_free(log->hashdir);
-	log->hashdir = hd;
 }
 
 void log_free_remove(struct log *log)
@@ -340,6 +332,11 @@ void log_free_remove(struct log *log)
 	if (r == -1) {
 		log_warn(log->db, "Can't unlink unused index file %s.",
 			 idx_filename(log->log_number));
+	}
+	r = dir_unlink(log->index_dir, _dirty_idx_filename(log->log_number));
+	if (r == -1) {
+		log_warn(log->db, "Can't unlink unused dirty index file %s.",
+			 _dirty_idx_filename(log->log_number));
 	}
 	if (log->hashdir) {
 		hashdir_free(log->hashdir);
@@ -389,7 +386,13 @@ uint64_t log_used_size(struct log *log)
 	return log->used_size.sum;
 }
 
-float log_ratio(struct log *log)
+void log_index_save(struct log *log)
 {
-	return (float)reader_size(log->reader) / (float)log->used_size.sum;
+	int r = hashdir_save(log->hashdir, log->index_dir,
+			     idx_filename(log->log_number));
+	if (r == -1) {
+		log_warn(log->db, "Unable to save index for "
+			 "log %llx.",
+			 (unsigned long long)log->log_number);
+	}
 }
