@@ -278,18 +278,8 @@ struct file *file_open_append(struct dir *top_dir, const char *filename)
 
 struct file *file_open_append_new(struct dir *top_dir, const char *filename)
 {
-	struct file *file = _file_new(top_dir, filename,
-				      O_WRONLY | O_APPEND | O_CREAT | O_EXCL);
-	if (file) {
-		return file;
-	}
-	if (errno == EEXIST) {
-		renameat(dirfd(top_dir->dir), filename,
-			 dirfd(top_dir->dir), _backup_filename(filename));
-		file = _file_new(top_dir, filename,
-				 O_WRONLY | O_APPEND | O_CREAT | O_TRUNC);
-	}
-	return file;
+	return _file_new(top_dir, filename,
+			 O_WRONLY | O_APPEND | O_CREAT | O_TRUNC);
 }
 
 struct file *file_open_new_rw(struct dir *top_dir, const char *filename)
