@@ -247,6 +247,8 @@ int hashdir_del_last(struct hashdir *hd)
 	hd->items[last_pos] = (struct item){0,0,0,0};
 	hd->items_cnt -= 1;
 
+	/* TODO */
+#if 0
 	if (hd->items_cnt + HASHDIR_SHRINK_THRESHOLD < hd->items_sz) {
 		uint64_t new_sz = sizeof(struct item)*hd->items_cnt + 4;
 		if (hd->mmap_sz) {
@@ -260,6 +262,7 @@ int hashdir_del_last(struct hashdir *hd)
 			hd->items_sz = hd->items_cnt;
 		}
 	}
+#endif
 	return 0;
 }
 
