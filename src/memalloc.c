@@ -14,10 +14,11 @@
 # include <valgrind/helgrind.h>
 #endif
 
-#define MIN_CHUNK_SIZE 14
-#define MAX_CHUNK_SIZE 328
+#define MAX_CHUNKS 64
 
-#define MAX_CHUNKS (MAX_CHUNK_SIZE/2 - MIN_CHUNK_SIZE/2 + 1)
+#define GET_CHUNK_IDX(sz) ((((sz) - 8) / 5) - 1)
+#define CHUNK_SZ_FROM_IDX(i) (8+(i+1)*5)
+#define CHUNK_SZ_OK(sz) (((sz) - 8) % 5 == 0  && sz >= (8+1*5) && (sz) <= (8+64*5))
 
 
 struct mem_cache {
@@ -27,6 +28,7 @@ struct mem_cache {
 struct mem_context {
 	int pages_allocated;
 	int page_size;
+	unsigned long wasted;
 	struct mem_cache caches[MAX_CHUNKS];
 };
 
@@ -46,11 +48,12 @@ void *mem_context_new()
 {
 	void *ptr;
 	if (posix_memalign(&ptr, CACHELINE_SIZE, sizeof(struct mem_context)) != 0) {
-		abort();	/* Out of memory. */
+		abort();
 	}
 	struct mem_context *mc = (struct mem_context*)ptr;
 	mc->pages_allocated = 0;
 	mc->page_size = 4096;
+	mc->wasted = 0;
 	int i;
 	for (i=0; i < MAX_CHUNKS; i++) {
 		INIT_LIST_HEAD(&mc->caches[i].list_of_free_pages);
@@ -59,13 +62,14 @@ void *mem_context_new()
 }
 
 
-static void mem_free_cached(struct mem_context *mc);
+static void _mem_free_cached(struct mem_context *mc);
 
 void mem_context_free(void *_mc)
 {
 	struct mem_context *mc = (struct mem_context*)_mc;
-	mem_free_cached(mc);
+	_mem_free_cached(mc);
 	assert(mc->pages_allocated == 0);
+	assert(mc->wasted == 0);
 	free(mc);
 }
 
@@ -77,21 +81,29 @@ void mem_context_allocated(void *_mc,
 	if (allocated_ptr) {
 		*allocated_ptr = mc->pages_allocated * mc->page_size;
 	}
-	unsigned long wasted = mc->pages_allocated * sizeof(struct mem_page);
-	int i;
-	for (i=0; i < MAX_CHUNKS; i++) {
-		struct list_head *head;
-		list_for_each(head, &mc->caches[i].list_of_free_pages) {
-			struct mem_page *page =
-				container_of(head, struct mem_page, in_list);
-			unsigned sz = i*2 + MIN_CHUNK_SIZE;
-			wasted += sz * page->free_chunks;
-			wasted += (mc->page_size - sizeof(struct mem_page)) % sz;
-		}
-	}
 	if (wasted_ptr) {
-		*wasted_ptr = wasted;
+		unsigned long w = 0;
+		int i;
+		for (i=0; i < MAX_CHUNKS; i++) {
+			struct list_head *head;
+			list_for_each(head, &mc->caches[i].list_of_free_pages) {
+				struct mem_page *page =
+					container_of(head, struct mem_page,
+						     in_list);
+				unsigned sz = CHUNK_SZ_FROM_IDX(i);
+				w += sz * page->free_chunks;
+			}
+		}
+		*wasted_ptr = mc->wasted + w;
 	}
+}
+
+static unsigned _wasted(unsigned page_size, unsigned header_sz, int odd,
+			unsigned size) {
+	int elements = (page_size - header_sz) / size;
+	return header_sz +
+		elements*odd +
+		(page_size - header_sz - elements*size);
 }
 
 static inline struct mem_page *page_alloc(struct mem_context *mc, unsigned size)
@@ -99,7 +111,7 @@ static inline struct mem_page *page_alloc(struct mem_context *mc, unsigned size)
 	mc->pages_allocated ++;
 	void *ptr;
 	if (posix_memalign(&ptr, mc->page_size, mc->page_size) != 0) {
-		abort();	/* Out of memory. */
+		abort();
 	}
 
 	struct mem_page *page = (struct mem_page*)ptr;
@@ -108,55 +120,63 @@ static inline struct mem_page *page_alloc(struct mem_context *mc, unsigned size)
 	page->free_chunks = 0;
 	page->chunks_count = 0;
 
-	char *chunk_ptr = (char*)ptr + sizeof(struct mem_page);
-	char *end = (char*)ptr + mc->page_size;
+	int header_sz = sizeof(struct mem_page);
+
+	/* Chunks always need to be rounded to two bytes - last bit
+	 * of the pointer must be zero. */
+	int odd = size % 2;
+	size += odd;
 
 	#ifdef VALGRIND
 	/* For valgrind, leave a word between chunks. */
 	size += 2;
 	/* And one after the header. */
-	chunk_ptr += 2;
+	header_sz += 2;
 	#endif
 
+	mc->wasted += _wasted(mc->page_size, header_sz, odd, size);
+
+	char *chunk_ptr = (char*)ptr + header_sz;
+	char *end = (char*)ptr + mc->page_size;
 
 	#ifdef VALGRIND
 	VALGRIND_CREATE_MEMPOOL(page, 0, 0);
 	VALGRIND_MAKE_MEM_NOACCESS(chunk_ptr, end - chunk_ptr);
 	#endif
 
-	//for (item=chunk_ptr; chunk_ptr <= end
-	while (1) {
+	for (; chunk_ptr + size <= end; chunk_ptr += size) {
 		char *item = chunk_ptr;
-		chunk_ptr += size;
-		if (unlikely(chunk_ptr > end)) {
-			break;
-		}
 
 		struct mem_chunk *chunk = (struct mem_chunk*)item;
 		#ifdef VALGRIND
 		VALGRIND_MAKE_MEM_DEFINED(chunk, sizeof(struct mem_chunk));
 		#endif
 		queue_put(&chunk->in_queue, &page->queue_of_free_chunks);
-		page->chunks_count ++;
 	}
+	page->chunks_count = (mc->page_size - header_sz) / size;
 	page->free_chunks = page->chunks_count;
 	return page;
 }
 
-static inline void page_free(struct mem_context *mc, struct mem_page *page)
+static inline void page_free(struct mem_context *mc, struct mem_page *page,
+			     unsigned size)
 {
 	mc->pages_allocated --;
+
+	int header_sz = sizeof(struct mem_page);
+	int odd = size % 2;
+	size += odd;
+	#ifdef VALGRIND
+	header_sz += 2;
+	size += 2;
+	#endif
+	mc->wasted -= _wasted(mc->page_size, header_sz, odd, size);
 
 	#ifdef VALGRIND
 	VALGRIND_DESTROY_MEMPOOL(page);
 	#endif
 	assert(page->chunks_count == page->free_chunks);
 	free(page);
-}
-
-static inline int get_chunk_idx(unsigned size)
-{
-	return (size - MIN_CHUNK_SIZE)/2;
 }
 
 static inline struct mem_page *page_from_chunk(struct mem_context *mc,
@@ -169,13 +189,12 @@ static inline struct mem_page *page_from_chunk(struct mem_context *mc,
 
 void *mem_alloc(void *_mc, unsigned size)
 {
-	size = ((size + 1) / 2) * 2;
 	struct mem_context *mc = (struct mem_context*)_mc;
-	if (unlikely(size < MIN_CHUNK_SIZE || size > MAX_CHUNK_SIZE)) {
+	if (unlikely(!CHUNK_SZ_OK(size))) {
 		assert(0);
 		return malloc(size);
 	}
-	struct mem_cache *cache = &mc->caches[get_chunk_idx(size)];
+	struct mem_cache *cache = &mc->caches[GET_CHUNK_IDX(size)];
 
 	struct mem_page *page;
 	if (unlikely(list_empty(&cache->list_of_free_pages))) {
@@ -204,14 +223,13 @@ void *mem_alloc(void *_mc, unsigned size)
 
 void mem_free(void *_mc, void *ptr, unsigned size)
 {
-	size = ((size + 1) / 2) * 2;
 	struct mem_context *mc = (struct mem_context*)_mc;
-	if (unlikely(size < MIN_CHUNK_SIZE || size > MAX_CHUNK_SIZE)) {
+	if (unlikely(!CHUNK_SZ_OK(size))) {
 		assert(0);
 		free(ptr);
 		return;
 	}
-	struct mem_cache *cache = &mc->caches[get_chunk_idx(size)];
+	struct mem_cache *cache = &mc->caches[GET_CHUNK_IDX(size)];
 	struct mem_chunk *chunk = ptr;
 	struct mem_page *page = page_from_chunk(mc, chunk);
 
@@ -228,19 +246,16 @@ void mem_free(void *_mc, void *ptr, unsigned size)
 			 &cache->list_of_free_pages);
 	}
 	if (unlikely(page->free_chunks == page->chunks_count)) {
-		list_del(&page->in_list);
-		if (list_empty(&cache->list_of_free_pages)) {
-			/* TODO: more efficient? */
-			list_add(&page->in_list,
-				 &cache->list_of_free_pages);
+		if (!list_is_singular(&cache->list_of_free_pages)) {
+			list_del(&page->in_list);
+			page_free(mc, page, size);
 		} else {
-			INIT_LIST_HEAD(&page->in_list);
-			page_free(mc, page);
+			/* Always keep one page hanging. */
 		}
 	}
 }
 
-static void mem_free_cached(struct mem_context *mc)
+static void _mem_free_cached(struct mem_context *mc)
 {
 	int i;
 	for (i=0; i < MAX_CHUNKS; i++) {
@@ -251,8 +266,7 @@ static void mem_free_cached(struct mem_context *mc)
 
 			if (page->free_chunks == page->chunks_count) {
 				list_del(&page->in_list);
-				INIT_LIST_HEAD(&page->in_list);
-				page_free(mc, page);
+				page_free(mc, page, CHUNK_SZ_FROM_IDX(i));
 			}
 		}
 	}
