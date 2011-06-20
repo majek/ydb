@@ -5,18 +5,28 @@ struct hashdir_item {
 	uint32_t bitmap_pos;
 };
 
-struct hashdir *hashdir_new(struct db *db);
+typedef void (*hashdir_move_cb)(void *ud, uint128_t key_hash, int new_hpos, int old_hpos);
+
+struct hashdir *hashdir_new_active(struct db *db,
+				   hashdir_move_cb callback, void *userdata);
 struct hashdir *hashdir_new_load(struct db *db,
-				 struct dir *dir, const char *filename);
+				 hashdir_move_cb callback, void *userdata,
+				 struct dir *dir, const char *filename,
+				 struct bitmap *mask);
+
+
 struct hashdir *hashdir_dup_sorted(struct hashdir *hdo);
 void hashdir_free(struct hashdir *hd);
 
-int hashdir_add(struct hashdir *hd, struct hashdir_item hi);
 struct hashdir_item hashdir_get(struct hashdir *hd, int hdpos);
-int hashdir_del(struct hashdir *hd, int hdpos);
-int hashdir_del_last(struct hashdir *hd);
-int hashdir_save(struct hashdir *hd, struct dir *dir, const char *filename);
-int hashdir_size(struct hashdir *hd);
-int hashdir_freeze(struct hashdir *hd, struct dir *dir, const char *filename);
+struct hashdir_item hashdir_del(struct hashdir *hd, int hdpos);
 
+int hashdir_add(struct hashdir *hd, struct hashdir_item hi);
+int hashdir_freeze(struct hashdir *hd,
+		   struct dir *dir, const char *filename);
+
+int hashdir_save(struct hashdir *hd);
 struct bitmap *hashdir_get_bitmap(struct hashdir *hd);
+
+int hashdir_size(struct hashdir *hd);
+

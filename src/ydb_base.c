@@ -40,12 +40,11 @@ static void _add(void *base_p, struct hashdir_item hdi,
 	*log_remno_ptr = log_to_remno(base->logs, log);
 }
 
-static void _del(void *base_p, uint64_t log_remno, int hpos,
-		 move_item_callback callback, void *callback_cb) {
+static void _del(void *base_p, uint64_t log_remno, int hpos) {
 	struct base *base = (struct base *)base_p;
 	struct log *log = log_by_remno(base->logs, log_remno);
 
-	struct hashdir_item hdi = log_del(log, hpos, callback, callback_cb);
+	struct hashdir_item hdi = log_del(log, hpos);
 	stddev_remove(&base->used_size, hdi.size);
 }
 
@@ -88,14 +87,21 @@ struct base *base_new(struct db *db, struct dir *log_dir, struct dir *index_dir,
 	return base;
 }
 
+static int _save_log(void *base_p, struct log *log)
+{
+	struct base *base = (struct base *)base_p;
+	if (log != logs_newest(base->logs)) {
+		log_index_save(log);
+	}
+	return 0;
+}
+
 void base_free(struct base *base)
 {
+	logs_iterate(base->logs, _save_log, base);
+
 	while (logs_oldest(base->logs)) {
 		struct log *log = logs_oldest(base->logs);
-		if (log != logs_newest(base->logs)) {
-			log_index_save(log);
-		}
-
 		logs_del(base->logs, log);
 		log_free(log);
 	}
@@ -153,8 +159,9 @@ int base_load(struct base *base)
 			struct log *log = log_new_fast(base->db, log_number,
 						       base->log_dir,
 						       base->index_dir,
-						       rec.bitmap);
-			bitmap_free(rec.bitmap);
+						       rec.bitmap,
+						       itree_move_callback,
+						       base->itree);
 			if (log == NULL) {
 				/* It's possible that we removed the
 				 * oldest log, and the snapshot is not
@@ -199,7 +206,9 @@ int base_load(struct base *base)
 		assert(logno_list[i] > log_number);
 		log_number = logno_list[i];
 		struct log *log = log_new_replay(base->db, log_number,
-						 base->log_dir, base->index_dir);
+						 base->log_dir, base->index_dir,
+						 itree_move_callback,
+						 base->itree);
 		if (log == NULL) {
 			log_error(base->db, "Can't load log %llx.",
 				  (unsigned long long)log_number);
@@ -213,7 +222,12 @@ int base_load(struct base *base)
 				  (unsigned long long)log_number);
 			return -1;
 		}
-		log_freeze(log);
+		r = log_freeze(log);
+		if (r != 0) {
+			log_error(base->db, "Can't load log %llx.",
+				  (unsigned long long)log_number);
+			return -1;
+		}
 
 		gettimeofday(&tv1, NULL);
 		log_info(base->db, "log=%llx %6.1f MB committed, %6.1f MB used, "
@@ -239,7 +253,9 @@ int base_load(struct base *base)
 	log_number = logno;
 
 	struct log *log = log_new_replay(base->db, log_number,
-					 base->log_dir, base->index_dir);
+					 base->log_dir, base->index_dir,
+					 itree_move_callback,
+					 base->itree);
 	if (log == NULL) {
 		log_error(base->db, "Can't load log %llx.",
 			  (unsigned long long)log_number);

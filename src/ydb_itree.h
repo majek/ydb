@@ -5,8 +5,7 @@ typedef struct hashdir_item (*rlog_get)(void *context,
 					uint64_t log_remno, int hpos);
 typedef void (*rlog_add)(void *context, struct hashdir_item hdi,
 			 uint64_t *log_remno_ptr, int *hpos_ptr);
-typedef void (*rlog_del)(void *context, uint64_t log_remno, int hpos,
-			 move_item_callback callback, void *context_cb);
+typedef void (*rlog_del)(void *context, uint64_t log_remno, int hpos);
 
 
 struct itree;
@@ -16,6 +15,7 @@ void itree_free(struct itree *itree);
 void itree_add(struct itree *itree, struct hashdir_item hdi);
 void itree_add_noidx(struct itree *itree, uint128_t key_hash,
 		     uint64_t log_remno, int hpos);
+void itree_move_callback(void *itree_p, uint128_t key_hash, int new_hpos, int old_hpos);
 
 int itree_del(struct itree *itree, uint128_t key_hash);
 int itree_get2(struct itree *itree, uint128_t key_hash,

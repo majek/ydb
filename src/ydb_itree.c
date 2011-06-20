@@ -5,6 +5,8 @@
 #include <string.h>
 #include <sys/uio.h>
 
+#include "bitmap.h"
+
 #include "ydb_common.h"
 #include "ydb_logging.h"
 #include "ydb_file.h"
@@ -108,17 +110,21 @@ void itree_add_noidx(struct itree *itree, uint128_t key_hash,
 	assert(found == packed);
 }
 
-static int _itree_move_callback(void *itree_p, uint128_t key_hash, int new_hpos)
+
+
+
+void itree_move_callback(void *itree_p, uint128_t key_hash, int new_hpos, int old_hpos)
 {
+	/* TODO: could be twice as fast - in-place */
 	struct itree *itree = (struct itree*)itree_p;
 	uint64_t found = ohamt_delete(&itree->tree, key_hash);
 	assert(found);
 	struct tree_item ti = _unpack(found);
+	assert(ti.hpos == old_hpos);
 	ti.hpos = new_hpos;
 	uint64_t t = _pack(ti);
 	found = ohamt_insert(&itree->tree, t);
 	assert(found == t);
-	return 0;
 }
 
 int itree_del(struct itree *itree, uint128_t key_hash)
@@ -126,8 +132,7 @@ int itree_del(struct itree *itree, uint128_t key_hash)
 	uint64_t found = ohamt_delete(&itree->tree, key_hash);
 	if (found) {
 		struct tree_item ti = _unpack(found);
-		itree->rlog_del(itree->rlog_ctx, ti.log_remno, ti.hpos,
-				_itree_move_callback, itree);
+		itree->rlog_del(itree->rlog_ctx, ti.log_remno, ti.hpos);
 		return 1;
 	}
 	return 0;

@@ -287,6 +287,11 @@ struct file *file_open_new_rw(struct dir *top_dir, const char *filename)
 	return _file_new(top_dir, filename, O_RDWR | O_CREAT | O_TRUNC);
 }
 
+struct file *file_open_rw(struct dir *top_dir, const char *filename)
+{
+	return _file_new(top_dir, filename, O_RDWR);
+}
+
 struct file *file_open_read(struct dir *top_dir, const char *filename)
 {
 	return _file_new(top_dir, filename, O_RDONLY | O_NOATIME);
@@ -457,11 +462,11 @@ void *file_mmap_share(struct file *file, uint64_t size)
 	return _file_mmap(file, size, MAP_SHARED);
 }
 
-int file_msync(struct db *db, void *ptr, uint64_t size)
+int file_msync(struct db *db, void *ptr, uint64_t size, int sync)
 {
-	int r = msync(ptr, size, MS_SYNC);
-	DBTRACE(db, r, "msync(%p, %llu, MS_SYNC)",
-		ptr, (unsigned long long)size);
+	int r = msync(ptr, size, sync ? MS_SYNC : MS_ASYNC);
+	DBTRACE(db, r, "msync(%p, %llu, %s)",
+		ptr, (unsigned long long)size, sync ? "MS_SYNC" : "MS_ASYNC");
 	return r;
 }
 
@@ -488,4 +493,15 @@ void *file_remap(struct db *db, void *ptr,
 		return NULL;
 	}
 	return new_ptr;
+}
+
+int dir_truncateat(struct dir *dir, const char *filename, uint64_t size)
+{
+	struct file *file = file_open_rw(dir, filename);
+	if (file == NULL) {
+		return -1;
+	}
+	int r = file_truncate(file, size);
+	file_close(file);
+	return r;
 }

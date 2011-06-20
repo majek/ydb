@@ -12,6 +12,8 @@ O_FILES=src/ydb_batch.o		\
 	src/ydb_record.o	\
 	src/ydb_reader.o	\
 	src/ydb_hashdir.o	\
+	src/ydb_hashdir_active.o	\
+	src/ydb_hashdir_frozen.o	\
 	src/ydb_itree.o		\
 	src/ohamt.o		\
 	src/stddev.o		\

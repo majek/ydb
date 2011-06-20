@@ -52,7 +52,8 @@ int base_roll(struct base *base)
 		return -1;
 	}
 	struct log *log = log_new_replay(base->db, log_number, base->log_dir,
-					 base->index_dir);
+					 base->index_dir,
+					 itree_move_callback, base->itree);
 	if (log == NULL) {
 		writer_free(base->writer);
 		base->writer = NULL;
@@ -63,7 +64,13 @@ int base_roll(struct base *base)
 	}
 	log_do_replay(log, _dummy_reply_callback, NULL);
 	struct log *newest = logs_newest(base->logs);
-	log_freeze(newest);
+	int r = log_freeze(newest);
+	if (r != 0) {
+		log_error(base->db, "log=%llx can't freeze log",
+			 (unsigned long long)log_get_number(newest));
+		log_free(log);
+		return -1;
+	}
 	log_info(base->db, "log=%llx %6.1f MB committed, %6.1f MB used, "
 		 "%10u items (freezing)",
 		 (unsigned long long)log_get_number(newest),

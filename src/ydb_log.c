@@ -29,6 +29,8 @@ struct log {
 	struct stddev used_size;
 
 	struct hashdir *hashdir;
+	log_move_callback move_callback;
+	void *move_userdata;
 };
 
 
@@ -53,7 +55,9 @@ static char *_dirty_idx_filename(uint64_t log_number) {
 }
 
 static struct log *_log_new(struct db *db, uint64_t log_number,
-			    struct dir *log_dir, struct dir *index_dir)
+			    struct dir *log_dir, struct dir *index_dir,
+			    log_move_callback move_callback,
+			    void *move_userdata)
 {
 	struct reader *reader = reader_new(db, log_dir, log_filename(log_number));
 	if (reader == NULL) {
@@ -67,36 +71,47 @@ static struct log *_log_new(struct db *db, uint64_t log_number,
 	log->index_dir = index_dir;
 	log->log_number = log_number;
 	log->reader = reader;
+
+	log->move_callback = move_callback;
+	log->move_userdata = move_userdata;
 	return log;
 }
 
 struct log *log_new_replay(struct db *db, uint64_t log_number,
-			   struct dir *log_dir, struct dir *index_dir)
+			   struct dir *log_dir, struct dir *index_dir,
+			   log_move_callback move_callback,
+			   void *move_context)
 {
-	struct log *log = _log_new(db, log_number, log_dir, index_dir);
+	struct log *log = _log_new(db, log_number, log_dir, index_dir,
+				   move_callback, move_context);
 	if (log == NULL) {
 		return NULL;
 	}
-	log->hashdir = hashdir_new(db);
+	log->hashdir = hashdir_new_active(db, move_callback, move_context);
 	return log;
 }
 
 int log_do_replay(struct log *log, log_replay_cb callback, void *userdata)
 {
-	assert(hashdir_get_bitmap(log->hashdir) == NULL);
 	return reader_replay(log->reader, callback, userdata);
 }
 
 struct log *log_new_fast(struct db *db, uint64_t log_number,
 			 struct dir *log_dir, struct dir *index_dir,
-			 struct bitmap *bitmap)
+			 struct bitmap *bitmap,
+			 log_move_callback move_callback,
+			 void *move_context)
 {
-	struct log *log = _log_new(db, log_number, log_dir, index_dir);
+	struct log *log = _log_new(db, log_number, log_dir, index_dir,
+				   move_callback, move_context);
 	if (log == NULL) {
 		return NULL;
 	}
 	char *idx_file = idx_filename(log_number);
-	struct hashdir *hdsets = hashdir_new_load(db, index_dir, idx_file);
+	struct hashdir *hdsets = hashdir_new_load(db,
+						  move_callback, move_context,
+						  index_dir, idx_file,
+						  bitmap);
 	if (hdsets == NULL) {
 		log_warn(db, "Can't find index file \"%s\".", idx_file);
 		log_free(log);
@@ -114,34 +129,23 @@ struct log *log_new_fast(struct db *db, uint64_t log_number,
 		/* } */
 	}
 
-	int s = 0;
 	int i;
 	int hpos_max = hashdir_size(hdsets);
 	for (i=1; i < hpos_max; i++) {
 		struct hashdir_item hi = hashdir_get(hdsets, i);
-		if (bitmap_get(bitmap, hi.bitmap_pos) == 0) { /* add */
-			stddev_add(&log->used_size, hi.size);
-		} else { /* delete */
-			int r = hashdir_del(hdsets, i);
-			if (r != -1) {
-				s += hashdir_del_last(hdsets);
-				/* Visit this element once more. */
-				i--;
-			}
-			hpos_max--;
-		}
+		stddev_add(&log->used_size, hi.size);
 	}
 
 	log->hashdir = hdsets;
-	if (s > 4) {
-		int r = hashdir_save(log->hashdir, log->index_dir,
-				     idx_filename(log->log_number));
-		if (r == -1) {
-			log_warn(log->db, "Unable to save index for "
-				 "log %llx.",
-				 (unsigned long long)log->log_number);
-		}
-	}
+	/* if (s > 4) { */
+	/* 	int r = hashdir_save(log->hashdir, log->index_dir, */
+	/* 			     idx_filename(log->log_number)); */
+	/* 	if (r == -1) { */
+	/* 		log_warn(log->db, "Unable to save index for " */
+	/* 			 "log %llx.", */
+	/* 			 (unsigned long long)log->log_number); */
+	/* 	} */
+	/* } */
 
 	return log;
 }
@@ -284,40 +288,34 @@ int log_add(struct log *log, struct hashdir_item hdi)
 	return hashdir_add(log->hashdir, hdi);
 }
 
-struct hashdir_item log_del(struct log *log, int hpos,
-			    log_callback callback, void *context)
+struct hashdir_item log_del(struct log *log, int hpos)
 {
-	struct hashdir_item hdi = hashdir_get(log->hashdir, hpos);
+	struct hashdir_item hdi = hashdir_del(log->hashdir, hpos);
 	stddev_remove(&log->used_size, hdi.size);
-
-	int hpos_moved = hashdir_del(log->hashdir, hpos);
-	if (hpos_moved != -1) {
-		struct hashdir_item item = hashdir_get(log->hashdir, hpos_moved);
-		callback(context, item.key_hash, hpos);
-		hashdir_del_last(log->hashdir);
-		/* TODO: really, quite that often, maybe fork? */
-		/* if (0 && s) { */
-		/* 	int r = hashdir_save(log->hashdir, log->index_dir, */
-		/* 			     idx_filename(log->log_number)); */
-		/* 	if (r == -1) { */
-		/* 		log_warn(log->db, "Unable to save index for " */
-		/* 			 "log %llx.", */
-		/* 			 (unsigned long long)log->log_number); */
-		/* 	} */
-		/* } */
-	}
 	return hdi;
 }
 
-void log_freeze(struct log *log)
+int log_freeze(struct log *log)
 {
 	int r = hashdir_freeze(log->hashdir, log->index_dir,
 			       idx_filename(log->log_number));
 	if (r == -1) {
 		log_error(log->db, "Unable to save index for log %llx. This is "
 			  "pretty bad.", (unsigned long long)log->log_number);
-		return;
+		return -1;
 	}
+	struct hashdir *hd = hashdir_new_load(log->db, log->move_callback,
+					      log->move_userdata, log->index_dir,
+					      idx_filename(log->log_number),
+					      bitmap_new(hashdir_size(log->hashdir), 0));
+	if (hd == NULL) {
+		log_error(log->db, "Can't load saved index %llx.",
+			  (unsigned long long)log->log_number);
+		return -1;
+	}
+	hashdir_free(log->hashdir);
+	log->hashdir = hd;
+	return 0;
 }
 
 void log_free_remove(struct log *log)
@@ -388,8 +386,7 @@ uint64_t log_used_size(struct log *log)
 
 void log_index_save(struct log *log)
 {
-	int r = hashdir_save(log->hashdir, log->index_dir,
-			     idx_filename(log->log_number));
+	int r = hashdir_save(log->hashdir);
 	if (r == -1) {
 		log_warn(log->db, "Unable to save index for "
 			 "log %llx.",

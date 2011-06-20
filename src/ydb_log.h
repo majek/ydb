@@ -1,14 +1,19 @@
 struct log;
 
 typedef int (*log_callback)(void *context, uint128_t key_hash, int hpos);
+typedef void (*log_move_callback)(void *context, uint128_t key_hash, int hpos, int old_hpos);
 
 
 struct log *log_new_fast(struct db *db, uint64_t log_number,
 			 struct dir *log_dir, struct dir *index_dir,
-			 struct bitmap *bitmap);
+			 struct bitmap *bitmap,
+			 log_move_callback move_callback,
+			 void *move_context);
 
 struct log *log_new_replay(struct db *db, uint64_t log_number,
-			   struct dir *log_dir, struct dir *index_dir);
+			   struct dir *log_dir, struct dir *index_dir,
+			   log_move_callback move_callback,
+			   void *move_context);
 
 typedef void (*log_replay_cb)(void *context,
 			      uint32_t magic,
@@ -37,11 +42,10 @@ unsigned log_prefetch(struct log *log, int hpos);
 
 struct hashdir_item log_get(struct log *log, int hpos);
 int log_add(struct log *log, struct hashdir_item hdi);
-struct hashdir_item log_del(struct log *log, int hpos,
-			    log_callback callback, void *context);
+struct hashdir_item log_del(struct log *log, int hpos);
 
 
-void log_freeze(struct log *log);
+int log_freeze(struct log *log);
 uint64_t log_get_number(struct log *log);
 
 
