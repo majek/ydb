@@ -1,6 +1,7 @@
 #define _POSIX_SOURCE
 #include <assert.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <openssl/md5.h>
 
@@ -65,7 +66,10 @@ int readlines(FILE *file, readlines_cb fun)
 
 struct ydb *test_ydb_open(int argc, char **argv, struct ydb_options opt)
 {
-	assert(argc == 2);
+	assert(argc >= 2);
+	if (argc >= 3) {
+		opt.log_file_size_limit = atoi(argv[2]) * (1<<20);
+	}
 	struct ydb *ydb = ydb_open(argv[1], &opt);
 	assert(ydb);
 	return ydb;
@@ -86,7 +90,8 @@ char *hex_md5(void *key_hash)
 
 char *md5_str(const char *key, unsigned key_sz)
 {
-        unsigned char digest[20];
+        unsigned char digest[32];
+	memset(digest, 0, sizeof(digest));
 
         MD5_CTX md5;
         MD5_Init(&md5);

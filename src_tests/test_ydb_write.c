@@ -45,10 +45,7 @@ int do_line(char *action, int tokc, char **tokv)
 
 int main(int argc, char **argv)
 {
-	ydb = test_ydb_open(argc, argv, (struct ydb_options) {
-			0,
-				0,
-				0});
+	ydb = test_ydb_open(argc, argv, (struct ydb_options) {16 << 20, 0, 0});
 	batch = ydb_batch();
 
 	int ret = readlines(stdin, do_line);
