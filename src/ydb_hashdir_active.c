@@ -87,8 +87,6 @@ int hashdir_freeze(struct hashdir *hd, struct dir *dir, const char *filename)
 	int r = file_appendv(file, iov, 2, 0);
 	if (r < 0) goto error;
 
-	r = file_sync(file);
-	if (r < 0) goto error;
 	file_close(file);
 	file = NULL;
 
