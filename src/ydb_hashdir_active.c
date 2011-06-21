@@ -52,9 +52,10 @@ struct hashdir_item active_del(struct hashdir *hd, int hdpos)
 
 	int last_pos = hd->items_cnt - 1;
 	if (hdpos != last_pos) {
-		struct hashdir_item last = _unpack(hd->items[last_pos]);
 		hd->items[hdpos] = hd->items[last_pos];
-		hd->move_callback(hd->move_userdata, last.key_hash, hdpos, last_pos);
+		/* At this point, both hdpos and last_point must have
+		 * a valid value. */
+		hd->move_callback(hd->move_userdata, hdpos, last_pos);
 	}
 	hd->items[last_pos] = (struct item){0,0,0,0};
 	hd->items_cnt -= 1;
@@ -103,3 +104,16 @@ error:;
 	return -1;
 }
 
+struct item *active_next(struct hashdir *hd, struct item *item)
+{
+	if (item == NULL) {
+		return &hd->items[1];
+	}
+
+	item ++;
+
+	if (item <= &hd->items[hd->items_cnt]) {
+		return item;
+	}
+	return NULL;
+}

@@ -15,7 +15,8 @@ void itree_free(struct itree *itree);
 void itree_add(struct itree *itree, struct hashdir_item hdi);
 void itree_add_noidx(struct itree *itree, uint128_t key_hash,
 		     uint64_t log_remno, int hpos);
-void itree_move_callback(void *itree_p, uint128_t key_hash, int new_hpos, int old_hpos);
+void itree_move_callback(void *itree_p, uint64_t new_log_remno,
+			 int new_hpos, int old_hpos);
 
 int itree_del(struct itree *itree, uint128_t key_hash);
 int itree_get2(struct itree *itree, uint128_t key_hash,

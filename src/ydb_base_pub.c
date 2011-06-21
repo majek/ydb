@@ -194,14 +194,15 @@ int base_gc(struct base *base, unsigned gc_size)
 	if (r < 0) {
 		goto error;
 	}
-	r = ctx.written + r;
+	ctx.written += r;
 error:;
 	gettimeofday(&tv1, NULL);
-	log_info(base->db, "Gc round of size %6.1f MB took %lu ms, "
-		 "ratio of %6.3f, r is %i",
+	log_info(base->db, "Gc round of size %3.1f/%3.1f MB took %lu ms, "
+		 "ratio of %6.3f%s",
+		 (float)ctx.written / (1024*1024.),
 		 (float)gc_size / (1024*1024.),
 		 TIMEVAL_MSEC_SUBTRACT(tv1, tv0),
 		 base_ratio(base),
-		 r);
+		 r < 0 ? "(error)" : "");
 	return r;
 }

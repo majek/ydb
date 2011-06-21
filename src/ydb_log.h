@@ -1,7 +1,8 @@
 struct log;
 
 typedef int (*log_callback)(void *context, uint128_t key_hash, int hpos);
-typedef void (*log_move_callback)(void *context, uint128_t key_hash, int hpos, int old_hpos);
+typedef void (*log_move_callback)(void *context, struct log *log,
+				  int new_hpos, int old_hpos);
 
 
 struct log *log_new_fast(struct db *db, uint64_t log_number,

@@ -233,6 +233,32 @@ uint64_t ohamt_insert(struct ohamt_root *root, uint64_t item)
 	return item;
 }
 
+uint64_t ohamt_replace(struct ohamt_root *root, uint64_t new_item)
+{
+	uint128_t item_hash = root->hash(root->hash_ud, new_item);
+	assert(((unsigned long)new_item & ITEM_MASK) == 0);
+	assert(new_item);
+
+	if (unlikely(ston(root->slot) == NULL)) {
+		return OHAMT_NOT_FOUND;
+	}
+
+	struct ohamt_state s;
+        s.level = 0;
+        s.ptr[0] = &root->slot;
+
+	uint64_t found_item = __ohamt_search(root, item_hash, &s);
+	if (unlikely(found_item == OHAMT_NOT_FOUND)) {
+		return OHAMT_NOT_FOUND;
+	}
+
+	struct ohamt_slot *found_slot = s.ptr[s.level];
+	*found_slot = item_to_slot(new_item);
+
+	return found_item;
+}
+
+
 /**************************************************************************/
 
 static struct ohamt_node *__ohamt_del_node(struct ohamt_root *root,

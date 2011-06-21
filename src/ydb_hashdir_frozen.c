@@ -142,7 +142,7 @@ struct hashdir *hashdir_new_load(struct db *db,
 	}
 
 	hd->deleted_sz = hd->items_cnt >= 1024 ? hd->items_cnt/4 : hd->items_cnt;
-	hd->deleted = malloc(sizeof(uint32_t) * hd->deleted_sz);
+	hd->deleted = malloc(sizeof(int) * hd->deleted_sz);
 	hd->deleted_cnt = 0;
 
 	hd->bitmap = mask;
@@ -150,7 +150,7 @@ struct hashdir *hashdir_new_load(struct db *db,
 	for (i=1; i < hd->items_cnt; i++) {
 		int bpos = hd->items[i].bitmap_pos;
 		if (bitmap_get(mask, bpos) == 1) {
-			hashdir_del(hd, bpos);
+			frozen_del(hd, i, 0, 0);
 		}
 	}
 	return hd;
@@ -167,10 +167,10 @@ void frozen_free(struct hashdir *hd)
 
 static int _rev_int_cmp(const void *p1, const void *p2)
 {
-	const uint32_t *a = p1, *b = p2;
-	if (*a < *b) {
+	const int a = abs(*(int*)p1), b = abs(*(int*)p2);
+	if (a < b) {
 		return 1;
-	} else if (*a > *b) {
+	} else if (a > b) {
 		return -1;
 	}
 	return 0;
@@ -180,17 +180,17 @@ int hashdir_save(struct hashdir *hd)
 {
 	log_info(hd->db, "SAVE %i %i", hd->deleted_cnt, hd->items_cnt);
 	assert(IS_FROZEN(hd));
-	qsort(hd->deleted, hd->deleted_cnt, sizeof(uint32_t), _rev_int_cmp);
+	qsort(hd->deleted, hd->deleted_cnt, sizeof(int), _rev_int_cmp);
 
 	/* TODO: I'm sure we can do better than just moving last item
 	 * a lot of times.  */
-	unsigned i;
+	int i;
 	for (i=0; i < hd->deleted_cnt; i++) {
 		active_del(hd, hd->deleted[i]);
 	}
 	free(hd->deleted);
 	hd->deleted_sz = hd->items_cnt >= 1024 ? hd->items_cnt/4 : hd->items_cnt;
-	hd->deleted = malloc(sizeof(uint32_t) * hd->deleted_sz);
+	hd->deleted = malloc(sizeof(int) * hd->deleted_sz);
 	hd->deleted_cnt = 0;
 
 	int size = sizeof(struct item) * hd->items_cnt + 4;
@@ -207,24 +207,26 @@ int hashdir_save(struct hashdir *hd)
 }
 
 
-struct hashdir_item frozen_del(struct hashdir *hd, int hpos)
+struct hashdir_item frozen_del(struct hashdir *hd, int hpos, int in_index,
+			       int may_save)
 {
 	assert(hpos > 0  && hpos < hd->items_cnt);
 	struct hashdir_item hdi = _unpack(hd->items[hpos]);
 
-	assert(bitmap_get(hd->bitmap, hdi.bitmap_pos) == 0);
-	bitmap_set(hd->bitmap, hdi.bitmap_pos);
-
+	if (in_index) {
+		assert(bitmap_get(hd->bitmap, hdi.bitmap_pos) == 0);
+		bitmap_set(hd->bitmap, hdi.bitmap_pos);
+	}
 	hd->deleted[hd->deleted_cnt] = hpos;
 	hd->deleted_cnt += 1;
 
-	if (hd->deleted_cnt > 1024 && hd->deleted_cnt > hd->items_cnt / 8) {
+	if (may_save && hd->deleted_cnt >= 1024 && hd->deleted_cnt > hd->items_cnt / 8) {
 		hashdir_save(hd);
 	}
 
 	if (hd->deleted_cnt == hd->deleted_sz) {
 		int sz = hd->deleted_sz * 2;
-		hd->deleted = realloc(hd->deleted, sizeof(uint32_t) * sz);
+		hd->deleted = realloc(hd->deleted, sizeof(int) * sz);
 		hd->deleted_sz = sz;
 	}
 	return hdi;
@@ -234,4 +236,21 @@ struct bitmap *hashdir_get_bitmap(struct hashdir *hd)
 {
 	assert(IS_FROZEN(hd));
 	return hd->bitmap;
+}
+
+struct item *frozen_next(struct hashdir *hd, struct item *item)
+{
+	if (item == NULL) {
+		item = &hd->items[1];
+	} else {
+		item ++;
+	}
+
+	struct item *last = &hd->items[hd->items_cnt];
+	for (;item < last; item++) {
+		if (bitmap_get(hd->bitmap, (unsigned)item->bitmap_pos) == 0) {
+			return item;
+		}
+	}
+	return NULL;
 }

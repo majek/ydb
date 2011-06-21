@@ -48,6 +48,14 @@ static void _del(void *base_p, uint64_t log_remno, int hpos) {
 	stddev_remove(&base->used_size, hdi.size);
 }
 
+void base_move_callback(void *base_p, struct log *log,
+			int new_hpos, int old_hpos)
+{
+	struct base *base = (struct base *)base_p;
+	itree_move_callback(base->itree, log_to_remno(base->logs, log),
+			    new_hpos, old_hpos);
+}
+
 static uint64_t _between(uint64_t min, uint64_t user, uint64_t max)
 {
 	if (user >= min && user <= max) {
@@ -160,8 +168,8 @@ int base_load(struct base *base)
 						       base->log_dir,
 						       base->index_dir,
 						       rec.bitmap,
-						       itree_move_callback,
-						       base->itree);
+						       base_move_callback,
+						       base);
 			if (log == NULL) {
 				/* It's possible that we removed the
 				 * oldest log, and the snapshot is not
@@ -207,8 +215,8 @@ int base_load(struct base *base)
 		log_number = logno_list[i];
 		struct log *log = log_new_replay(base->db, log_number,
 						 base->log_dir, base->index_dir,
-						 itree_move_callback,
-						 base->itree);
+						 base_move_callback,
+						 base);
 		if (log == NULL) {
 			log_error(base->db, "Can't load log %llx.",
 				  (unsigned long long)log_number);
@@ -254,8 +262,8 @@ int base_load(struct base *base)
 
 	struct log *log = log_new_replay(base->db, log_number,
 					 base->log_dir, base->index_dir,
-					 itree_move_callback,
-					 base->itree);
+					 base_move_callback,
+					 base);
 	if (log == NULL) {
 		log_error(base->db, "Can't load log %llx.",
 			  (unsigned long long)log_number);

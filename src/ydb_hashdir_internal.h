@@ -18,9 +18,9 @@ struct hashdir {
 	struct dir *dir;
 	uint64_t mmap_sz;
 	struct bitmap *bitmap;
-	uint32_t *deleted;
-	uint32_t deleted_cnt;
-	uint32_t deleted_sz;
+	int *deleted;
+	int deleted_cnt;
+	int deleted_sz;
 };
 
 #define DATA_ALIGN 5
@@ -53,8 +53,9 @@ struct hashdir *_hashdir_new(struct db *db,
 /* ydb_hashdir_active.c */
 void active_free(struct hashdir *hd);
 struct hashdir_item active_del(struct hashdir *hd, int hdpos);
+struct item *active_next(struct hashdir *hd, struct item *item);
 
 /* ydb_hashdir_frozen.c */
 void frozen_free(struct hashdir *hd);
-struct hashdir_item frozen_del(struct hashdir *hd, int hdpos);
-
+struct hashdir_item frozen_del(struct hashdir *hd, int hdpos, int do_mask, int may_save);
+struct item *frozen_next(struct hashdir *hd, struct item *item);

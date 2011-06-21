@@ -53,7 +53,7 @@ int base_roll(struct base *base)
 	}
 	struct log *log = log_new_replay(base->db, log_number, base->log_dir,
 					 base->index_dir,
-					 itree_move_callback, base->itree);
+					 base_move_callback, base);
 	if (log == NULL) {
 		writer_free(base->writer);
 		base->writer = NULL;

@@ -113,18 +113,27 @@ void itree_add_noidx(struct itree *itree, uint128_t key_hash,
 
 
 
-void itree_move_callback(void *itree_p, uint128_t key_hash, int new_hpos, int old_hpos)
+void itree_move_callback(void *itree_p, uint64_t new_log_remno,
+			 int new_hpos, int old_hpos)
 {
 	/* TODO: could be twice as fast - in-place */
 	struct itree *itree = (struct itree*)itree_p;
-	uint64_t found = ohamt_delete(&itree->tree, key_hash);
+
+	uint64_t t = _pack((struct tree_item){new_log_remno, new_hpos});
+	uint64_t found = ohamt_replace(&itree->tree, t);
 	assert(found);
 	struct tree_item ti = _unpack(found);
 	assert(ti.hpos == old_hpos);
-	ti.hpos = new_hpos;
-	uint64_t t = _pack(ti);
-	found = ohamt_insert(&itree->tree, t);
-	assert(found == t);
+	assert(ti.log_remno == new_log_remno);
+
+	/* uint64_t found = ohamt_delete(&itree->tree, key_hash); */
+	/* assert(found); */
+	/* struct tree_item ti = _unpack(found); */
+	/* assert(ti.hpos == old_hpos); */
+	/* ti.hpos = new_hpos; */
+	/* uint64_t t = _pack(ti); */
+	/* found = ohamt_insert(&itree->tree, t); */
+	/* assert(found == t); */
 }
 
 int itree_del(struct itree *itree, uint128_t key_hash)

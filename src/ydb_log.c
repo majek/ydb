@@ -34,6 +34,12 @@ struct log {
 };
 
 
+static void _log_move(void *log_p, int new_hpos, int old_hpos)
+{
+	struct log *log = (struct log *)log_p;
+	log->move_callback(log->move_userdata, log, new_hpos, old_hpos);
+}
+
 static char *_filename(uint64_t log_number, char *suffix)
 {
 	static char buf[256];
@@ -87,7 +93,7 @@ struct log *log_new_replay(struct db *db, uint64_t log_number,
 	if (log == NULL) {
 		return NULL;
 	}
-	log->hashdir = hashdir_new_active(db, move_callback, move_context);
+	log->hashdir = hashdir_new_active(db, _log_move, log);
 	return log;
 }
 
@@ -109,7 +115,7 @@ struct log *log_new_fast(struct db *db, uint64_t log_number,
 	}
 	char *idx_file = idx_filename(log_number);
 	struct hashdir *hdsets = hashdir_new_load(db,
-						  move_callback, move_context,
+						  _log_move, log,
 						  index_dir, idx_file,
 						  bitmap);
 	if (hdsets == NULL) {
@@ -129,42 +135,27 @@ struct log *log_new_fast(struct db *db, uint64_t log_number,
 		/* } */
 	}
 
-	int i;
-	int hpos_max = hashdir_size(hdsets);
-	for (i=1; i < hpos_max; i++) {
-		struct hashdir_item hi = hashdir_get(hdsets, i);
-		stddev_add(&log->used_size, hi.size);
+	void *ptr;
+	struct hashdir_item hdi;
+	hashdir_for_each(hdsets, ptr, hdi) {
+		stddev_add(&log->used_size, hdi.size);
 	}
-
 	log->hashdir = hdsets;
-	/* if (s > 4) { */
-	/* 	int r = hashdir_save(log->hashdir, log->index_dir, */
-	/* 			     idx_filename(log->log_number)); */
-	/* 	if (r == -1) { */
-	/* 		log_warn(log->db, "Unable to save index for " */
-	/* 			 "log %llx.", */
-	/* 			 (unsigned long long)log->log_number); */
-	/* 	} */
-	/* } */
-
 	return log;
 }
 
 int log_iterate(struct log *log, log_callback callback, void *userdata)
 {
-	int hpos_max = hashdir_size(log->hashdir);
-	assert(hpos_max < 2 || log->used_size.count != 0);
-
-	int i;
-	int r = 0;
-	for (i=1; i < hpos_max; i++) {
-		struct hashdir_item hi = hashdir_get(log->hashdir, i);
-		r = callback(userdata, hi.key_hash, i);
+	int hdpos;
+	void *ptr;
+	struct hashdir_item hdi;
+	hashdir_for_each_hdpos(log->hashdir, ptr, hdi, hdpos) {
+		int r = callback(userdata, hdi.key_hash, hdpos);
 		if (r) {
-			break;
+			return r;
 		}
 	}
-	return r;
+	return 0;
 }
 
 #define DIV_ROUND_UP(n,d) (((n) + (d) - 1) / (d))
@@ -173,7 +164,7 @@ int log_iterate(struct log *log, log_callback callback, void *userdata)
 static int _iterate_prefetch(struct log *log, struct hashdir *shd,
 			     int last_hpos, uint64_t prefetch_size)
 {
-	int hpos_max = hashdir_size(shd);
+	int hpos_max = hashdir_size2(shd);
 	if (prefetch_size < 2) {
 		return hpos_max;
 	}
@@ -224,7 +215,7 @@ int log_iterate_sorted(struct log *log, uint64_t prefetch_size,
 	log_info(log->db, "Sorting index in log %llx took %5li ms.",
 		 (unsigned long long)log->log_number,
 		 TIMEVAL_MSEC_SUBTRACT(tv1, tv0));
-	int hpos_max = hashdir_size(shd);
+	int hpos_max = hashdir_size2(shd);
 
 	int last_hpos = 1;
 	int r = 0;
@@ -304,10 +295,11 @@ int log_freeze(struct log *log)
 			  "pretty bad.", (unsigned long long)log->log_number);
 		return -1;
 	}
-	struct hashdir *hd = hashdir_new_load(log->db, log->move_callback,
-					      log->move_userdata, log->index_dir,
+	struct hashdir *hd = hashdir_new_load(log->db,
+					      _log_move, log,
+					      log->index_dir,
 					      idx_filename(log->log_number),
-					      bitmap_new(hashdir_size(log->hashdir), 0));
+					      bitmap_new(hashdir_size2(log->hashdir), 0));
 	if (hd == NULL) {
 		log_error(log->db, "Can't load saved index %llx.",
 			  (unsigned long long)log->log_number);
@@ -370,7 +362,7 @@ int log_is_unused(struct log *log)
 
 unsigned log_sets_count(struct log *log)
 {
-	return hashdir_size(log->hashdir);
+	return hashdir_size2(log->hashdir);
 }
 
 uint64_t log_disk_size(struct log *log)

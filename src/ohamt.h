@@ -62,6 +62,9 @@ uint64_t ohamt_search(struct ohamt_root *root, uint128_t hash);
  * Return an item that matches the hash. */
 uint64_t ohamt_insert(struct ohamt_root *root, uint64_t item);
 
+/* Replaces an item with new value. Returns overwritten value. */
+uint64_t ohamt_replace(struct ohamt_root *root, uint64_t new_item);
+
 /* Remove the item. */
 uint64_t ohamt_delete(struct ohamt_root *root, uint128_t hash);
 

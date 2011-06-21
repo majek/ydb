@@ -23,6 +23,9 @@ struct base {
 #define STATE_FILENAME "snapshot.bin"
 
 /* ydb_base.c */
+void base_move_callback(void *base_p, struct log *log,
+			int new_hpos, int old_hpos);
+
 struct base *base_new(struct db *db, struct dir *log_dir, struct dir *index_dir,
 		      struct ydb_options *options);
 void base_free(struct base *base);

@@ -42,7 +42,7 @@ struct hashdir_item hashdir_del(struct hashdir *hd, int hdpos)
 	if (IS_ACTIVE(hd)) {
 		return active_del(hd, hdpos);
 	}
-	return frozen_del(hd, hdpos);
+	return frozen_del(hd, hdpos, 1, 1);
 }
 
 static int _hashdir_offset_sort(const void *a_p, const void *b_p)
@@ -82,7 +82,30 @@ struct hashdir_item hashdir_get(struct hashdir *hd, int hdpos)
 	return _unpack(hd->items[hdpos]);
 }
 
-int hashdir_size(struct hashdir *hd)
+void *_hashdir_next(struct hashdir *hd,
+		    void *item_ptr,
+		    struct hashdir_item *hdi,
+		    int *hdpos_ptr)
+{
+	struct item *item = (struct item*)item_ptr;
+	if (IS_FROZEN(hd)) {
+		item = frozen_next(hd, item);
+	} else {
+		item = active_next(hd, item);
+	}
+	if (item != NULL) {
+		*hdi = _unpack(*item);
+		if (hdpos_ptr) {
+			*hdpos_ptr = item - hd->items;
+		}
+	}
+	/* At least one item */
+	assert(item_ptr || item);
+	return item;
+}
+
+
+int hashdir_size2(struct hashdir *hd)
 {
 	if (IS_ACTIVE(hd)) {
 		return hd->items_cnt;
