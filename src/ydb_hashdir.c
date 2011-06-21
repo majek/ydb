@@ -99,8 +99,6 @@ void *_hashdir_next(struct hashdir *hd,
 			*hdpos_ptr = item - hd->items;
 		}
 	}
-	/* At least one item */
-	assert(item_ptr || item);
 	return item;
 }
 

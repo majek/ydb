@@ -8,8 +8,12 @@
 #include "test_common.h"
 
 
+char *database_path = NULL;
 struct ydb *ydb = NULL;
 struct ydb_batch *batch = NULL;
+
+float gc_ratio = 4.0;
+struct ydb_options opt = {16 << 20,0,0};
 
 int do_line(char *action, int tokc, char **tokv)
 {
@@ -23,7 +27,7 @@ int do_line(char *action, int tokc, char **tokv)
 		return 0;
 	} else if (streq(action, "write")) {
 		int do_fsync = 0;
-		if (tokc == 1) {
+		if (tokc >= 1) {
 			do_fsync = atoi(tokv[0]);
 		}
 		int r = ydb_write(ydb, batch, do_fsync);
@@ -31,13 +35,28 @@ int do_line(char *action, int tokc, char **tokv)
 		ydb_batch_free(batch);
 		batch = ydb_batch();
 
-		if (ydb_ratio(ydb) > 4.0)
-			fprintf(stderr, " [*] need to do gc\n");
-		while (ydb_ratio(ydb) > 4.0) {
-			fprintf(stderr, " [.] gc ratio=%f\n", ydb_ratio(ydb));
+		while (ydb_ratio(ydb) > gc_ratio) {
 			int j = ydb_roll(ydb, 1 << 20);
 			assert(j >= 0);
 		}
+		return 0;
+	} else if (streq(action, "reopen")) {
+		if (tokc >= 1) {
+			opt.log_file_size_limit = atoi(tokv[0]) * 1024; // KiB
+		}
+		if (tokc >= 2) {
+			opt.max_open_logs = atoi(tokv[1]);
+		}
+		if (tokc >= 3) {
+			opt.index_size_limit = atoi(tokv[2]) * 1024; // KiB
+		}
+		ydb_close(ydb);
+		ydb = ydb_open(database_path, &opt);
+		assert(ydb);
+		return 0;
+	} else if (streq(action, "gc") && tokc == 1) {
+		gc_ratio = atof(tokv[0]);
+		assert(gc_ratio > 1.0);
 		return 0;
 	}
 	return 1;
@@ -45,7 +64,8 @@ int do_line(char *action, int tokc, char **tokv)
 
 int main(int argc, char **argv)
 {
-	ydb = test_ydb_open(argc, argv, (struct ydb_options) {16 << 20, 0, 0});
+	database_path = argv[1];
+	ydb = test_ydb_open(argc, argv, opt);
 	batch = ydb_batch();
 
 	int ret = readlines(stdin, do_line);

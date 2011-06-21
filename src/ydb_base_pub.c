@@ -147,7 +147,10 @@ int base_write(struct base *base, struct batch *batch, int do_fsync)
 
 float base_ratio(struct base *base)
 {
-	return (float)base->disk_size.sum / (float)base->used_size.sum;
+	if (base->used_size.sum) {
+		return (float)base->disk_size.sum / (float)base->used_size.sum;
+	}
+	return 0.0;
 }
 
 struct _gc_ctx {

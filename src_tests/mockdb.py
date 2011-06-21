@@ -20,7 +20,7 @@ for filename in sys.argv[1:]:
             key, = t
             if key in tree:
                 del tree[key]
-        elif action == 'write':
+        elif action in ['write', 'reopen', 'gc']:
             pass
         else:
             assert False

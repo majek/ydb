@@ -33,7 +33,7 @@ TPROGS=src_tests/test_ydb_write	\
 	src_tests/test_ydb_read
 
 
-all: libydb.a $(TPROGS)
+all: libydb.a $(TPROGS) tests
 
 libydb.a: $(O_FILES)
 	ar r $@ $^
@@ -54,3 +54,19 @@ src_tests/test_ydb_read: src_tests/test_ydb_read.o src_tests/test_common.o libyd
 
 clean::
 	rm -f libydb.a $(TPROGS) src/*.o src_tests/*.o
+
+
+tests/test-stress-gc.in:
+	python ./src_tests/simple_generate.py 10000 1 1600 > $@
+	rm -rf tests.mk
+
+tests/test-overwrites.in:
+	python ./src_tests/simple_generate.py 10000 1 1 > $@
+	rm -rf tests.mk
+
+tests:: tests/test-stress-gc.in tests/test-overwrites.in
+
+tests.mk: src_tests/generate_makefile.py
+	python src_tests/generate_makefile.py > tests.mk
+
+include tests.mk
