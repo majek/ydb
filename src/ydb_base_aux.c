@@ -7,6 +7,8 @@
 #include <sys/uio.h>
 #include <sys/time.h>
 
+#include "config.h"
+#include "list.h"
 #include "stddev.h"
 #include "bitmap.h"
 
@@ -14,6 +16,8 @@
 #include "ydb_logging.h"
 #include "ydb_file.h"
 #include "ydb_logs.h"
+#include "ydb_hashdir.h"
+#include "ydb_frozen_list.h"
 #include "ydb_log.h"
 #include "ydb_writer.h"
 #include "ydb_state.h"
@@ -53,7 +57,8 @@ int base_roll(struct base *base)
 	}
 	struct log *log = log_new_replay(base->db, log_number, base->log_dir,
 					 base->index_dir,
-					 base_move_callback, base);
+					 base_move_callback, base,
+					 base->frozen_list);
 	if (log == NULL) {
 		writer_free(base->writer);
 		base->writer = NULL;

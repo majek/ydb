@@ -12,12 +12,14 @@
 #include "ydb_file.h"
 
 #include "ydb_db.h"
+#include "ydb_worker.h"
 
 
 struct db {
 	int log_fd;
 	struct dir *log_dir;
 	struct dir *index_dir;
+	struct worker *worker;
 };
 
 static struct db *_db_new(const char *directory)
@@ -28,6 +30,12 @@ static struct db *_db_new(const char *directory)
 
 	db->log_dir = dir_open(db, directory);
 	if (db->log_dir == NULL) {
+		free(db);
+		return NULL;
+	}
+	db->worker = worker_new(db);
+	if (db->worker == NULL) {
+		dir_free(db->log_dir);
 		free(db);
 		return NULL;
 	}
@@ -74,6 +82,7 @@ struct db *db_new_mock()
 
 void db_free(struct db *db)
 {
+	worker_free(db->worker);
 	dir_free(db->log_dir);
 	dir_free(db->index_dir);
 	close(db->log_fd);
@@ -93,4 +102,19 @@ struct dir *db_log_dir(struct db *db)
 struct dir *db_index_dir(struct db *db)
 {
 	return db->index_dir;
+}
+
+void db_task(struct db *db, db_task_callback callback, void *userdata)
+{
+	worker_new_task(db->worker, callback, userdata);
+}
+
+void db_answer(struct db *db, db_task_callback callback, void *userdata)
+{
+	worker_new_answer(db->worker, callback, userdata);
+}
+
+int db_do_answers(struct db *db)
+{
+	return worker_do_answers(db->worker);
 }

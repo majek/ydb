@@ -15,6 +15,8 @@ struct ydb_batch *batch = NULL;
 float gc_ratio = 4.0;
 struct ydb_options opt = {16 << 20,0,0};
 
+unsigned gc_sz = 1 << 20;
+
 int do_line(char *action, int tokc, char **tokv)
 {
 	if (streq(action, "set") && tokc == 2) {
@@ -35,9 +37,13 @@ int do_line(char *action, int tokc, char **tokv)
 		ydb_batch_free(batch);
 		batch = ydb_batch();
 
-		while (ydb_ratio(ydb) > gc_ratio) {
-			int j = ydb_roll(ydb, 1 << 20);
-			assert(j >= 0);
+		while (ydb_ratio(ydb) > gc_ratio && gc_sz > 4) {
+			int j = ydb_roll(ydb, gc_sz);
+			if (j < 0) {
+				fprintf(stderr, "gc failed\n");
+				gc_sz /= 2;
+				break;
+			}
 		}
 		return 0;
 	} else if (streq(action, "reopen")) {

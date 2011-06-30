@@ -5,6 +5,8 @@
 #include <string.h>
 #include <sys/uio.h>
 
+#include "config.h"
+#include "list.h"
 #include "bitmap.h"
 
 #include "ydb_common.h"

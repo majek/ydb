@@ -11,6 +11,8 @@
 #include "ydb_common.h"
 #include "ydb_db.h"
 #include "ydb_file.h"
+#include "ydb_hashdir.h"
+#include "ydb_frozen_list.h"
 #include "ydb_log.h"
 
 #include "ydb_logs.h"

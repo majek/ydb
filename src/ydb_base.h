@@ -18,6 +18,7 @@ struct base {
 	struct dir *index_dir;
 
 	int snapshot_child_pid;
+	struct frozen_list *frozen_list;
 };
 
 #define STATE_FILENAME "snapshot.bin"

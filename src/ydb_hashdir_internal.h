@@ -21,6 +21,9 @@ struct hashdir {
 	int *deleted;
 	int deleted_cnt;
 	int deleted_sz;
+
+	struct list_head in_frozen_list;
+	struct frozen_list *frozen_list;
 };
 
 #define DATA_ALIGN 5

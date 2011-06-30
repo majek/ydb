@@ -9,12 +9,14 @@ struct log *log_new_fast(struct db *db, uint64_t log_number,
 			 struct dir *log_dir, struct dir *index_dir,
 			 struct bitmap *bitmap,
 			 log_move_callback move_callback,
-			 void *move_context);
+			 void *move_context,
+			 struct frozen_list *frozen_list);
 
 struct log *log_new_replay(struct db *db, uint64_t log_number,
 			   struct dir *log_dir, struct dir *index_dir,
 			   log_move_callback move_callback,
-			   void *move_context);
+			   void *move_context,
+			   struct frozen_list *frozen_list);
 
 typedef void (*log_replay_cb)(void *context,
 			      uint32_t magic,

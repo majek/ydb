@@ -7,6 +7,8 @@
 #include <sys/uio.h>
 #include <sys/time.h>
 
+#include "config.h"
+#include "list.h"
 #include "stddev.h"
 #include "bitmap.h"
 
@@ -14,12 +16,13 @@
 #include "ydb_logging.h"
 #include "ydb_file.h"
 #include "ydb_logs.h"
+#include "ydb_hashdir.h"
+#include "ydb_frozen_list.h"
 #include "ydb_log.h"
 #include "ydb_writer.h"
 #include "ydb_state.h"
 #include "ydb_itree.h"
 #include "ydb_record.h"
-#include "ydb_hashdir.h"
 #include "ydb_batch.h"
 
 #include "ydb.h"

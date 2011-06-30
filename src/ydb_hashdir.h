@@ -1,3 +1,5 @@
+struct frozen_list;
+
 struct hashdir_item {
 	uint128_t key_hash;
 	uint64_t offset;
@@ -12,7 +14,8 @@ struct hashdir *hashdir_new_active(struct db *db,
 struct hashdir *hashdir_new_load(struct db *db,
 				 hashdir_move_cb callback, void *userdata,
 				 struct dir *dir, const char *filename,
-				 struct bitmap *mask);
+				 struct bitmap *mask,
+				 struct frozen_list *fl);
 
 
 struct hashdir *hashdir_dup_sorted(struct hashdir *hdo);

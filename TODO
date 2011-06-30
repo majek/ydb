@@ -24,6 +24,7 @@
  - guard all mallocs/reallocs with assert.
  - warn if ulimit -n smaller than slots.
  - warn on no- memory overflow setting
+ - gc shall not fail with too-big-batch error
 
  - review exported functions
  - check on 32 bit platform

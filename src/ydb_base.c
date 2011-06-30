@@ -6,6 +6,8 @@
 #include <sys/uio.h>
 #include <sys/time.h>
 
+#include "config.h"
+#include "list.h"
 #include "stddev.h"
 #include "bitmap.h"
 
@@ -14,6 +16,7 @@
 #include "ydb_file.h"
 #include "ydb_logs.h"
 #include "ydb_hashdir.h"
+#include "ydb_frozen_list.h"
 #include "ydb_log.h"
 #include "ydb_itree.h"
 #include "ydb_writer.h"
@@ -92,6 +95,7 @@ struct base *base_new(struct db *db, struct dir *log_dir, struct dir *index_dir,
 	base->db = db;
 	base->itree = itree_new(_get, _add, _del, base);
 	base->logs = logs_new(base->db, base->max_open_logs);
+	base->frozen_list = frozen_list_new(db);
 	return base;
 }
 
@@ -113,6 +117,7 @@ void base_free(struct base *base)
 		logs_del(base->logs, log);
 		log_free(log);
 	}
+	frozen_list_free(base->frozen_list);
 
 	if (base->writer) {
 		writer_free(base->writer);
@@ -169,7 +174,8 @@ int base_load(struct base *base)
 						       base->index_dir,
 						       rec.bitmap,
 						       base_move_callback,
-						       base);
+						       base,
+						       base->frozen_list);
 			if (log == NULL) {
 				/* It's possible that we removed the
 				 * oldest log, and the snapshot is not
@@ -216,7 +222,8 @@ int base_load(struct base *base)
 		struct log *log = log_new_replay(base->db, log_number,
 						 base->log_dir, base->index_dir,
 						 base_move_callback,
-						 base);
+						 base,
+						 base->frozen_list);
 		if (log == NULL) {
 			log_error(base->db, "Can't load log %llx.",
 				  (unsigned long long)log_number);
@@ -263,7 +270,8 @@ int base_load(struct base *base)
 	struct log *log = log_new_replay(base->db, log_number,
 					 base->log_dir, base->index_dir,
 					 base_move_callback,
-					 base);
+					 base,
+					 base->frozen_list);
 	if (log == NULL) {
 		log_error(base->db, "Can't load log %llx.",
 			  (unsigned long long)log_number);

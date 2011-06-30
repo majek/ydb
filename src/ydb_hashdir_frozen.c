@@ -7,11 +7,14 @@
 #include <string.h>
 #include <sys/uio.h>
 
+#include "config.h"
+#include "list.h"
 #include "bitmap.h"
 #include "ydb_common.h"
 #include "ydb_logging.h"
 #include "ydb_file.h"
 #include "ydb_hashdir.h"
+#include "ydb_frozen_list.h"
 
 #include "ydb_hashdir_internal.h"
 
@@ -119,7 +122,8 @@ static char *_dirty_filename(const char *pathname)
 struct hashdir *hashdir_new_load(struct db *db,
 				 hashdir_move_cb callback, void *userdata,
 				 struct dir *dir, const char *filename,
-				 struct bitmap *mask)
+				 struct bitmap *mask,
+				 struct frozen_list *frozen_list)
 {
 	struct hashdir *hd = _hashdir_new(db, callback, userdata);
 
@@ -141,6 +145,9 @@ struct hashdir *hashdir_new_load(struct db *db,
 		return NULL;
 	}
 
+	hd->frozen_list = frozen_list;
+	frozen_list_add(frozen_list, hd);
+
 	hd->deleted_sz = hd->items_cnt >= 1024 ? hd->items_cnt/4 : hd->items_cnt;
 	hd->deleted = malloc(sizeof(int) * hd->deleted_sz);
 	hd->deleted_cnt = 0;
@@ -158,6 +165,7 @@ struct hashdir *hashdir_new_load(struct db *db,
 
 void frozen_free(struct hashdir *hd)
 {
+	frozen_list_del(hd->frozen_list, hd);
 	free(hd->dirtyname);
 	if (hd->bitmap) {
 		bitmap_free(hd->bitmap);
@@ -202,10 +210,8 @@ int hashdir_save(struct hashdir *hd)
 	*checksum = adler32((char*)hd->items, size - 4);
 
 	int r = dir_truncateat(hd->dir, hd->dirtyname, size);
-	int p = file_msync(hd->db, hd->items, size, 0);
-	return r || p;
+	return r;
 }
-
 
 struct hashdir_item frozen_del(struct hashdir *hd, int hpos, int in_index,
 			       int may_save)
@@ -220,14 +226,15 @@ struct hashdir_item frozen_del(struct hashdir *hd, int hpos, int in_index,
 	hd->deleted[hd->deleted_cnt] = hpos;
 	hd->deleted_cnt += 1;
 
-	if (may_save && hd->deleted_cnt >= 1024 && hd->deleted_cnt > hd->items_cnt / 8) {
-		hashdir_save(hd);
-	}
-
 	if (hd->deleted_cnt == hd->deleted_sz) {
-		int sz = hd->deleted_sz * 2;
-		hd->deleted = realloc(hd->deleted, sizeof(int) * sz);
-		hd->deleted_sz = sz;
+		if (may_save) {
+			frozen_list_incr(hd->frozen_list, hd);
+		}
+		if (hd->deleted_cnt == hd->deleted_sz) {
+			int sz = hd->deleted_sz * 2;
+			hd->deleted = realloc(hd->deleted, sizeof(int) * sz);
+			hd->deleted_sz = sz;
+		}
 	}
 	return hdi;
 }

@@ -6,6 +6,8 @@
 #include <sys/uio.h>
 #include <sys/time.h>
 
+#include "config.h"
+#include "list.h"
 #include "bitmap.h"
 #include "stddev.h"
 
@@ -13,6 +15,7 @@
 #include "ydb_logging.h"
 #include "ydb_file.h"
 #include "ydb_hashdir.h"
+#include "ydb_frozen_list.h"
 #include "ydb_log.h"
 #include "ydb_reader.h"
 #include "ydb_record.h"
@@ -31,6 +34,8 @@ struct log {
 	struct hashdir *hashdir;
 	log_move_callback move_callback;
 	void *move_userdata;
+
+	struct frozen_list *frozen_list;
 };
 
 
@@ -63,7 +68,8 @@ static char *_dirty_idx_filename(uint64_t log_number) {
 static struct log *_log_new(struct db *db, uint64_t log_number,
 			    struct dir *log_dir, struct dir *index_dir,
 			    log_move_callback move_callback,
-			    void *move_userdata)
+			    void *move_userdata,
+			    struct frozen_list *frozen_list)
 {
 	struct reader *reader = reader_new(db, log_dir, log_filename(log_number));
 	if (reader == NULL) {
@@ -80,16 +86,19 @@ static struct log *_log_new(struct db *db, uint64_t log_number,
 
 	log->move_callback = move_callback;
 	log->move_userdata = move_userdata;
+
+	log->frozen_list = frozen_list;
 	return log;
 }
 
 struct log *log_new_replay(struct db *db, uint64_t log_number,
 			   struct dir *log_dir, struct dir *index_dir,
 			   log_move_callback move_callback,
-			   void *move_context)
+			   void *move_context,
+			   struct frozen_list *frozen_list)
 {
 	struct log *log = _log_new(db, log_number, log_dir, index_dir,
-				   move_callback, move_context);
+				   move_callback, move_context, frozen_list);
 	if (log == NULL) {
 		return NULL;
 	}
@@ -106,10 +115,11 @@ struct log *log_new_fast(struct db *db, uint64_t log_number,
 			 struct dir *log_dir, struct dir *index_dir,
 			 struct bitmap *bitmap,
 			 log_move_callback move_callback,
-			 void *move_context)
+			 void *move_context,
+			 struct frozen_list *frozen_list)
 {
 	struct log *log = _log_new(db, log_number, log_dir, index_dir,
-				   move_callback, move_context);
+				   move_callback, move_context, frozen_list);
 	if (log == NULL) {
 		return NULL;
 	}
@@ -117,7 +127,8 @@ struct log *log_new_fast(struct db *db, uint64_t log_number,
 	struct hashdir *hdsets = hashdir_new_load(db,
 						  _log_move, log,
 						  index_dir, idx_file,
-						  bitmap);
+						  bitmap,
+						  frozen_list);
 	if (hdsets == NULL) {
 		log_warn(db, "Can't find index file \"%s\".", idx_file);
 		log_free(log);
@@ -299,7 +310,8 @@ int log_freeze(struct log *log)
 					      _log_move, log,
 					      log->index_dir,
 					      idx_filename(log->log_number),
-					      bitmap_new(hashdir_size2(log->hashdir), 0));
+					      bitmap_new(hashdir_size2(log->hashdir), 0),
+					      log->frozen_list);
 	if (hd == NULL) {
 		log_error(log->db, "Can't load saved index %llx.",
 			  (unsigned long long)log->log_number);

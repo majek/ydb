@@ -5,7 +5,10 @@
 #include <string.h>
 #include <sys/uio.h>
 
+#include "config.h"
+#include "list.h"
 #include "bitmap.h"
+
 #include "ydb_common.h"
 #include "ydb_logging.h"
 #include "ydb_file.h"
