@@ -104,7 +104,7 @@ static void _task_save(void *ctx_p)
 	gettimeofday(&tv0, NULL);
 	file_msync(ctx->db, ctx->ptr, ctx->size, 1);
 	gettimeofday(&tv1, NULL);
-	log_info(ctx->db, "(saving \"%s\", took %lu ms)",
+	log_info(ctx->db, "(flushing \"%s\", took %lu ms)",
 		 ctx->dirtyname,
 		 TIMEVAL_MSEC_SUBTRACT(tv1, tv0));
 
