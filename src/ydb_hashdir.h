@@ -28,7 +28,7 @@ int hashdir_add(struct hashdir *hd, struct hashdir_item hi);
 int hashdir_freeze(struct hashdir *hd,
 		   struct dir *dir, const char *filename);
 
-int hashdir_save(struct hashdir *hd);
+int hashdir_save(struct hashdir *hd, char *reason);
 int hashdir_size2(struct hashdir *hd);
 
 struct bitmap *hashdir_get_bitmap(struct hashdir *hd);

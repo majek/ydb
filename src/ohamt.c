@@ -405,9 +405,6 @@ void ohamt_delete_all(struct ohamt_root *root,
 
 /**************************************************************************/
 
-#define for_each_slice(slot, mask, tmp)		\
-	for (tmp=mask, slot=
-
 static inline void __ohamt_erase(struct ohamt_root *root,
                                   struct ohamt_slot *slot)
 {

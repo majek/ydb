@@ -390,7 +390,7 @@ uint64_t log_used_size(struct log *log)
 
 void log_index_save(struct log *log)
 {
-	int r = hashdir_save(log->hashdir);
+	int r = hashdir_save(log->hashdir, "index");
 	if (r == -1) {
 		log_warn(log->db, "Unable to save index for "
 			 "log %llx.",

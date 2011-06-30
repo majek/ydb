@@ -7,6 +7,8 @@
 #include "queue.h"
 #include "list.h"
 
+#define ITEM_MASK (0xFFFFFF0000000001ULL) /* 40 bits */
+
 #ifdef VALGRIND
 # warning "Compiling in valgrind hacks. This results in slow code."
 # include <valgrind/valgrind.h>
@@ -113,6 +115,7 @@ static inline struct mem_page *page_alloc(struct mem_context *mc, unsigned size)
 	if (posix_memalign(&ptr, mc->page_size, mc->page_size) != 0) {
 		abort();
 	}
+	assert(((unsigned long)ptr & ITEM_MASK) == 0);
 
 	struct mem_page *page = (struct mem_page*)ptr;
 	INIT_LIST_HEAD(&page->in_list);

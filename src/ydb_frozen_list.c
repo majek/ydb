@@ -6,6 +6,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/uio.h>
+#include <sys/time.h>
 
 #include "config.h"
 #include "list.h"
@@ -81,6 +82,7 @@ int frozen_list_maybe_marshall(struct frozen_list *fl)
 
 struct _task_save_ctx {
 	struct db *db;
+	char *dirtyname;
 	void *ptr;
 	uint64_t size;
 	struct frozen_list *fl;
@@ -97,8 +99,17 @@ static void _task_save(void *ctx_p)
 {
 	struct _task_save_ctx *ctx = (struct _task_save_ctx*)ctx_p;
 	/* If that fails, I guess not much will break. */
+
+	struct timeval tv0, tv1;
+	gettimeofday(&tv0, NULL);
 	file_msync(ctx->db, ctx->ptr, ctx->size, 1);
+	gettimeofday(&tv1, NULL);
+	log_info(ctx->db, "(saving \"%s\", took %lu ms)",
+		 ctx->dirtyname,
+		 TIMEVAL_MSEC_SUBTRACT(tv1, tv0));
+
 	db_answer(ctx->db, _answer_unbusy, ctx->fl);
+	free(ctx->dirtyname);
 	free(ctx);
 }
 
@@ -118,11 +129,12 @@ int frozen_list_marshall(struct frozen_list *fl)
 	frozen_list_add(fl, hd);
 
 	/* TODO: how to react on error? */
-	hashdir_save(hd);
+	hashdir_save(hd, "flush");
 
 	fl->busy = 1;
 	struct _task_save_ctx *ctx = malloc(sizeof(struct _task_save_ctx));
-	*ctx = (struct _task_save_ctx){fl->db, hd->items, hd->mmap_sz, fl};
+	*ctx = (struct _task_save_ctx){fl->db, strdup(hd->dirtyname),
+				       hd->items, hd->mmap_sz, fl};
 	db_task(fl->db, _task_save, ctx);
 
 	return 1;

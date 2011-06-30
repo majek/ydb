@@ -65,7 +65,7 @@ struct hashdir *hashdir_dup_sorted(struct hashdir *hdo)
 {
 	if (IS_FROZEN(hdo)) {
 		/* Make sure there are no gaps. */
-		hashdir_save(hdo);
+		hashdir_save(hdo, "sorted");
 	}
 
 	struct hashdir *hd = _hashdir_new(hdo->db, NULL, NULL);
@@ -112,7 +112,7 @@ int hashdir_size2(struct hashdir *hd)
 	}
 	if (hd->deleted_cnt) {
 		log_warn(hd->db, "hashdir_size on frozen. slow. %s", "");
-		hashdir_save(hd);
+		hashdir_save(hd, "size");
 	}
 	return hd->items_cnt;
 }

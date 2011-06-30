@@ -6,6 +6,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/uio.h>
+#include <sys/time.h>
 
 #include "config.h"
 #include "list.h"
@@ -184,9 +185,14 @@ static int _rev_int_cmp(const void *p1, const void *p2)
 	return 0;
 }
 
-int hashdir_save(struct hashdir *hd)
+int hashdir_save(struct hashdir *hd, char *reason)
 {
-	log_info(hd->db, "SAVE %i %i", hd->deleted_cnt, hd->items_cnt);
+	struct timeval tv0, tv1;
+	gettimeofday(&tv0, NULL);
+
+	int deleted_cnt = hd->deleted_cnt;
+	int items_cnt = hd->items_cnt;
+
 	assert(IS_FROZEN(hd));
 	qsort(hd->deleted, hd->deleted_cnt, sizeof(int), _rev_int_cmp);
 
@@ -210,6 +216,14 @@ int hashdir_save(struct hashdir *hd)
 	*checksum = adler32((char*)hd->items, size - 4);
 
 	int r = dir_truncateat(hd->dir, hd->dirtyname, size);
+
+	gettimeofday(&tv1, NULL);
+	log_info(hd->db, "(saving   \"%s\",%7.3f%% of all items deleted [%i/%i], %s, took %lu ms)",
+		 hd->dirtyname,
+		 (float)deleted_cnt * 100.0 / (float)items_cnt,
+		 deleted_cnt, items_cnt,
+		 reason,
+		 TIMEVAL_MSEC_SUBTRACT(tv1, tv0));
 	return r;
 }
 
