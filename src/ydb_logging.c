@@ -1,3 +1,6 @@
+#define _POSIX_C_SOURCE 200809L	/* openat(2) */
+
+#include <assert.h>
 #include <errno.h>
 #include <stdarg.h>
 #include <stdio.h>
@@ -12,6 +15,7 @@
 void ydb_logger(struct db *db, char *file, int line, const char *type,
 		const char *fmt, ...)
 {
+	assert(fmt);
 	char message[1024];
 	va_list ap;
 	va_start(ap, fmt);
@@ -30,10 +34,11 @@ void ydb_logger(struct db *db, char *file, int line, const char *type,
 	struct timeval tv;
 	gettimeofday(&tv, NULL);
 
-	struct tm *tmp = gmtime(&tv.tv_sec); // UTC
+	struct tm tmp;
+	gmtime_r(&tv.tv_sec, &tmp); // UTC
 
 	char time[32];
-	strftime(time, sizeof(time), "%Y-%m-%d %H:%M:%S", tmp);
+	strftime(time, sizeof(time), "%Y-%m-%d %H:%M:%S", &tmp);
 
 	char buf[1024];
 	int buf_len = snprintf(buf, sizeof(buf),
@@ -59,6 +64,7 @@ void ydb_logger(struct db *db, char *file, int line, const char *type,
 void ydb_logger_perror(struct db *db, char *file, int line,
 		       const char *fmt, ...)
 {
+	assert(fmt);
 	char *error = strerror(errno);
 
 	char message[1024];

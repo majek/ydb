@@ -1,7 +1,7 @@
 CC:=gcc
 
-CFLAGS=-std=c99 -pedantic -Wall -Wextra -g -fPIC -Isrc -O3 -march=native
-LIBS=-lm -lcrypto -lpthread
+CFLAGS=-std=c99 -pedantic -Wall -Wextra -g -fPIC -Isrc -O3 -pthread -march=native
+LIBS=-lm -lcrypto -pthread
 
 O_FILES=src/ydb_batch.o		\
 	src/ydb_common.o	\
