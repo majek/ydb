@@ -16,8 +16,8 @@ O_FILES=src/ydb_batch.o		\
 	src/ydb_hashdir_frozen.o	\
 	src/ydb_itree.o		\
 	src/ohamt.o		\
+	src/ohamt_mem.o		\
 	src/stddev.o		\
-	src/memalloc.o		\
 	src/ydb_log.o		\
 	src/bitmap.o		\
 	src/ydb_state.o		\

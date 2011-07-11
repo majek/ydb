@@ -24,8 +24,8 @@ typedef __uint128_t uint128_t;
 #endif
 
 struct ohamt_slot {
-	uint64_t off:40;
-} __attribute__ ((packed));
+	char data[5];
+} PACKED;
 
 struct ohamt_node {
 	uint64_t mask;
@@ -38,21 +38,19 @@ struct ohamt_state{
 	struct ohamt_slot *ptr[23]; /* ptr root->slot and 22 levels more  */
 };
 
+struct mem;
+typedef uint128_t (*hash_fun)(void *ud, uint64_t item);
 struct ohamt_root {
 	struct ohamt_slot slot;
 
-	void *mem_context;
-	void *(*mem_alloc)(void *mem_context, unsigned size);
-	void (*mem_free)(void *mem_context, void *ptr, unsigned size);
-        uint128_t (*hash)(void *ud, uint64_t item);
+	struct mem *mem;
+	hash_fun hash;
 	void *hash_ud;
 };
 
 
-
-
-#define OHAMT_ROOT(mem_context, alloc, free, hash, hash_ud)		\
-	(struct ohamt_root) {{0}, mem_context, alloc, free, hash, hash_ud}
+void INIT_OHAMT_ROOT(struct ohamt_root *root, hash_fun hash, void *hash_ud);
+void FREE_OHAMT_ROOT(struct ohamt_root *root);
 
 
 /* Find the item that matches the hash.*/
@@ -75,6 +73,11 @@ void ohamt_delete_all(struct ohamt_root *root,
 void ohamt_erase(struct ohamt_root *root);
 
 uint64_t ohamt_first(struct ohamt_root *root, struct ohamt_state *s);
+
+
+void ohamt_allocated(struct ohamt_root *root,
+		     uint64_t *allocated_ptr, uint64_t *wasted_ptr);
+
 
 #define OHAMT_NOT_FOUND (0)
 

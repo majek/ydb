@@ -15,11 +15,9 @@
 #include "ydb_hashdir.h"
 #include "ydb_itree.h"
 
-#include "memalloc.h"
 #include "ohamt.h"
 
 struct itree {
-	void *mem_context;
 	struct ohamt_root tree;
 
 	void *rlog_ctx;
@@ -73,9 +71,7 @@ struct itree *itree_new(rlog_get get, rlog_add add, rlog_del del, void *ctx)
 {
 	struct itree *itree = malloc(sizeof(struct itree));
 	memset(itree, 0, sizeof(struct itree));
-	itree->mem_context = mem_context_new();
-	itree->tree = OHAMT_ROOT(itree->mem_context, mem_alloc, mem_free,
-				 _itree_hash, itree);
+	INIT_OHAMT_ROOT(&itree->tree, _itree_hash, itree);
 	itree->rlog_ctx = ctx;
 	itree->rlog_get = get;
 	itree->rlog_add = add;
@@ -86,7 +82,7 @@ struct itree *itree_new(rlog_get get, rlog_add add, rlog_del del, void *ctx)
 void itree_free(struct itree *itree)
 {
 	ohamt_erase(&itree->tree);
-	mem_context_free(itree->mem_context);
+	FREE_OHAMT_ROOT(&itree->tree);
 	free(itree);
 }
 
@@ -165,5 +161,5 @@ int itree_get2(struct itree *itree, uint128_t key_hash,
 void itree_mem_stats(struct itree *itree,
 		     unsigned long *allocated_ptr, unsigned long *wasted_ptr)
 {
-	mem_context_allocated(itree->mem_context, allocated_ptr, wasted_ptr);
+	ohamt_allocated(&itree->tree, allocated_ptr, wasted_ptr);
 }
